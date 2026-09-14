@@ -71,9 +71,11 @@ fun LoginScreen(
             .imePadding()
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(10.dp))
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -83,7 +85,7 @@ fun LoginScreen(
                 .padding(20.dp)
         ) {
             Column {
-                // Centered LOGIN Header (SansSerif Black)
+                // Centered LOGIN Header
                 Text(
                     text = "LOGIN",
                     color = TrackerColors.TextPrimary,
@@ -97,7 +99,6 @@ fun LoginScreen(
                         .padding(bottom = 22.dp)
                 )
 
-                // Technical Monospace Label
                 Text(
                     text = "REGISTRATION NUMBER",
                     color = TrackerColors.TextSubtle,
@@ -143,7 +144,6 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Technical Monospace Label
                 Text(
                     text = "PASSWORD",
                     color = TrackerColors.TextSubtle,
@@ -208,7 +208,6 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(22.dp))
 
-                // Clean Action Button (SansSerif Bold)
                 Button(
                     onClick = {
                         focusManager.clearFocus()
@@ -254,5 +253,8 @@ fun LoginScreen(
                 }
             }
         }
+
+        // Bottom Footer Badge
+        FooterBadge()
     }
 }

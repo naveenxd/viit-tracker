@@ -126,6 +126,12 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
+
+        // Bottom Footer Badge
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            FooterBadge()
+        }
     }
 }
 
@@ -285,7 +291,6 @@ private fun HeroTerminalCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    // Student Name (SansSerif Bold)
                     Text(
                         text = studentName.ifBlank { "STUDENT" }.uppercase(),
                         color = TrackerColors.TextPrimary,
@@ -296,7 +301,6 @@ private fun HeroTerminalCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // Roll Number (Monospace)
                     Text(
                         text = rollNumber,
                         color = TrackerColors.TextMuted,
@@ -331,7 +335,6 @@ private fun HeroTerminalCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
-                // Percentage (Monospace Black)
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = "${overallPercentage.toInt()}",
@@ -389,7 +392,6 @@ private fun HeroTerminalCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Editorial Micro Insight (Serif Italic/Normal)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
