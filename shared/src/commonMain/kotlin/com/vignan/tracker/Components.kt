@@ -5,14 +5,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
@@ -60,41 +59,101 @@ fun AnimatedEyeIcon(
 
 @Composable
 private fun EyeIcon(modifier: Modifier = Modifier, color: Color) {
-    Canvas(modifier = modifier.size(18.dp)) {
+    Canvas(modifier = modifier.size(20.dp)) {
         val w = size.width
         val h = size.height
-        val strokeW = w * 0.1f
+        val strokeW = w * 0.11f
+        val strokeStyle = Stroke(width = strokeW, cap = StrokeCap.Round)
 
+        // Eyelid top curve (arch)
         val path = Path().apply {
-            moveTo(0f, h / 2f)
-            quadraticTo(w / 2f, -h / 4f, w, h / 2f)
-            quadraticTo(w / 2f, h + h / 4f, 0f, h / 2f)
-            close()
+            moveTo(w * 0.12f, h * 0.52f)
+            quadraticTo(w * 0.5f, h * 0.22f, w * 0.88f, h * 0.52f)
         }
-        drawPath(
-            path = path,
+        drawPath(path = path, color = color, style = strokeStyle)
+
+        // 3 Top Eyelashes radiating outwards
+        drawLine(
             color = color,
-            style = Stroke(width = strokeW)
+            start = Offset(w * 0.26f, h * 0.38f),
+            end = Offset(w * 0.16f, h * 0.20f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
         )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.5f, h * 0.32f),
+            end = Offset(w * 0.5f, h * 0.12f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.74f, h * 0.38f),
+            end = Offset(w * 0.84f, h * 0.20f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+
+        // Solid pupil circle hanging right underneath
         drawCircle(
             color = color,
-            radius = w * 0.18f,
-            center = Offset(w / 2f, h / 2f)
+            radius = w * 0.16f,
+            center = Offset(w * 0.5f, h * 0.62f)
         )
     }
 }
 
 @Composable
 private fun EyeOffIcon(modifier: Modifier = Modifier, color: Color) {
-    Box(modifier = modifier.size(18.dp)) {
-        EyeIcon(modifier = Modifier.fillMaxSize(), color = color.copy(alpha = 0.4f))
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawLine(
-                color = color,
-                start = Offset(0f, size.height),
-                end = Offset(size.width, 0f),
-                strokeWidth = size.width * 0.1f
-            )
+    Canvas(modifier = modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val strokeW = w * 0.11f
+        val strokeStyle = Stroke(width = strokeW, cap = StrokeCap.Round)
+
+        // Closed Eyelid curve (arch)
+        val path = Path().apply {
+            moveTo(w * 0.12f, h * 0.42f)
+            quadraticTo(w * 0.5f, h * 0.68f, w * 0.88f, h * 0.42f)
         }
+        drawPath(path = path, color = color, style = strokeStyle)
+
+        // 5 Bottom Eyelashes radiating downwards
+        drawLine(
+            color = color,
+            start = Offset(w * 0.18f, h * 0.46f),
+            end = Offset(w * 0.10f, h * 0.64f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.34f, h * 0.56f),
+            end = Offset(w * 0.28f, h * 0.76f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.5f, h * 0.60f),
+            end = Offset(w * 0.5f, h * 0.82f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.66f, h * 0.56f),
+            end = Offset(w * 0.72f, h * 0.76f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(w * 0.82f, h * 0.46f),
+            end = Offset(w * 0.90f, h * 0.64f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round
+        )
     }
 }
