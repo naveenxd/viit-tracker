@@ -3,6 +3,7 @@ package com.vignan.tracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -53,10 +56,16 @@ fun LoginScreen(
     onSubmit: () -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                })
+            }
             .navigationBarsPadding()
             .imePadding()
             .verticalScroll(scrollState)
@@ -88,7 +97,7 @@ fun LoginScreen(
                 )
 
                 Text(
-                    text = "REGISTRATION NUMBER",
+                    text = "Registration Number",
                     color = TrackerColors.TextSubtle,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -164,13 +173,19 @@ fun LoginScreen(
                         keyboardType = KeyboardType.Password,
                         imeAction = ImeAction.Done
                     ),
-                    keyboardActions = KeyboardActions(onDone = { onSubmit() })
+                    keyboardActions = KeyboardActions(onDone = {
+                        focusManager.clearFocus()
+                        onSubmit()
+                    })
                 )
 
                 Spacer(modifier = Modifier.height(22.dp))
 
                 Button(
-                    onClick = onSubmit,
+                    onClick = {
+                        focusManager.clearFocus()
+                        onSubmit()
+                    },
                     enabled = !isLoading,
                     modifier = Modifier
                         .fillMaxWidth()
