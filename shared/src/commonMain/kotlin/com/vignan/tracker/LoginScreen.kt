@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -82,27 +83,28 @@ fun LoginScreen(
                 .padding(20.dp)
         ) {
             Column {
-                // Centered LOGIN Header
+                // Centered LOGIN Header (SansSerif Black)
                 Text(
                     text = "LOGIN",
                     color = TrackerColors.TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.SansSerif,
+                    letterSpacing = 2.5.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 20.dp)
+                        .padding(bottom = 22.dp)
                 )
 
+                // Technical Monospace Label
                 Text(
-                    text = "Registration Number",
+                    text = "REGISTRATION NUMBER",
                     color = TrackerColors.TextSubtle,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp,
+                    letterSpacing = 1.2.sp,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
 
@@ -111,7 +113,19 @@ fun LoginScreen(
                     onValueChange = onRollNumberChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("e.g. 26L35A4699", color = TrackerColors.TextSubtle, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
+                    placeholder = {
+                        Text(
+                            text = "e.g. 26L35A4699",
+                            color = TrackerColors.TextSubtle,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = TrackerColors.TextPrimary
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = TrackerColors.SurfaceInput,
                         unfocusedContainerColor = TrackerColors.SurfaceInput,
@@ -129,13 +143,14 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // Technical Monospace Label
                 Text(
                     text = "PASSWORD",
                     color = TrackerColors.TextSubtle,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp,
+                    letterSpacing = 1.2.sp,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
 
@@ -144,7 +159,19 @@ fun LoginScreen(
                     onValueChange = onPasswordChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Password", color = TrackerColors.TextSubtle, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
+                    placeholder = {
+                        Text(
+                            text = "Password",
+                            color = TrackerColors.TextSubtle,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    },
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 13.sp,
+                        color = TrackerColors.TextPrimary
+                    ),
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         Box(
@@ -181,6 +208,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(22.dp))
 
+                // Clean Action Button (SansSerif Bold)
                 Button(
                     onClick = {
                         focusManager.clearFocus()
@@ -208,19 +236,19 @@ fun LoginScreen(
                         Text(
                             text = "LOGGING IN...",
                             color = TrackerColors.PureBlack,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.sp
+                            fontFamily = FontFamily.SansSerif,
+                            letterSpacing = 1.5.sp
                         )
                     } else {
                         Text(
                             text = "LOGIN",
                             color = TrackerColors.PureBlack,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.sp
+                            fontFamily = FontFamily.SansSerif,
+                            letterSpacing = 1.5.sp
                         )
                     }
                 }

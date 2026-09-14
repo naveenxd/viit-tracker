@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,9 +111,10 @@ fun DashboardScreen(
                             letterSpacing = 1.sp
                         )
                         Text(
-                            text = "Adjust search query or filter chip",
+                            text = "Adjust search query or active filter tab",
                             color = TrackerColors.TextSubtle,
                             fontSize = 11.sp,
+                            fontFamily = FontFamily.SansSerif,
                             modifier = Modifier.padding(top = 2.dp)
                         )
                     }
@@ -160,7 +162,7 @@ fun HeaderBar(
                         fontWeight = FontWeight.Black,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.5.sp
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -169,8 +171,8 @@ fun HeaderBar(
                     color = TrackerColors.TextPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
+                    fontFamily = FontFamily.SansSerif,
+                    letterSpacing = 0.5.sp
                 )
             }
 
@@ -196,7 +198,8 @@ fun HeaderBar(
                                 color = TrackerColors.TextPrimary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 1.sp
                             )
                         }
                     }
@@ -216,7 +219,8 @@ fun HeaderBar(
                             color = TrackerColors.TextMuted,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.sp
                         )
                     }
                 }
@@ -234,7 +238,7 @@ fun HeaderBar(
                         color = TrackerColors.TextMuted,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.2.sp
                     )
                 }
             }
@@ -281,15 +285,18 @@ private fun HeroTerminalCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    // Student Name (SansSerif Bold)
                     Text(
                         text = studentName.ifBlank { "STUDENT" }.uppercase(),
                         color = TrackerColors.TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif,
                         letterSpacing = 0.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    // Roll Number (Monospace)
                     Text(
                         text = rollNumber,
                         color = TrackerColors.TextMuted,
@@ -312,7 +319,7 @@ private fun HeroTerminalCard(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.2.sp
                     )
                 }
             }
@@ -324,11 +331,12 @@ private fun HeroTerminalCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
+                // Percentage (Monospace Black)
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = "${overallPercentage.toInt()}",
                         color = TrackerColors.TextPrimary,
-                        fontSize = 40.sp,
+                        fontSize = 42.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
@@ -356,7 +364,7 @@ private fun HeroTerminalCard(
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.2.sp
                     )
                 }
             }
@@ -381,6 +389,7 @@ private fun HeroTerminalCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Editorial Micro Insight (Serif Italic/Normal)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -403,7 +412,7 @@ private fun HeroTerminalCard(
                     },
                     color = TrackerColors.TextSecondary,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Serif
                 )
             }
         }
@@ -426,7 +435,19 @@ private fun FilterToolbar(
             onValueChange = onSearchQueryChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            placeholder = { Text("Filter course name or code...", color = TrackerColors.TextSubtle, fontSize = 11.sp, fontFamily = FontFamily.Monospace) },
+            placeholder = {
+                Text(
+                    text = "Filter course name or code...",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
+            },
+            textStyle = TextStyle(
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 12.sp,
+                color = TrackerColors.TextPrimary
+            ),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = TrackerColors.SurfaceDark,
                 unfocusedContainerColor = TrackerColors.SurfaceDark,
@@ -491,7 +512,8 @@ private fun SegmentChip(
             color = if (isSelected) accentColor else TrackerColors.TextMuted,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.8.sp
         )
     }
 }
@@ -542,6 +564,7 @@ private fun MinimalSubjectRow(subject: SubjectAttendance) {
                         color = TrackerColors.TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.SansSerif,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
