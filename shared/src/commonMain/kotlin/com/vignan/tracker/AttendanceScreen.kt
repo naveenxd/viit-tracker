@@ -3,6 +3,7 @@ package com.vignan.tracker
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,14 +27,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,13 +48,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,6 +88,47 @@ private fun calculateMargin(attended: Int, conducted: Int): AttendanceInsight {
 }
 
 @Composable
+private fun EyeIcon(modifier: Modifier = Modifier, color: Color) {
+    Canvas(modifier = modifier.size(18.dp)) {
+        val w = size.width
+        val h = size.height
+        val strokeW = w * 0.1f
+
+        val path = Path().apply {
+            moveTo(0f, h / 2f)
+            quadraticTo(w / 2f, -h / 4f, w, h / 2f)
+            quadraticTo(w / 2f, h + h / 4f, 0f, h / 2f)
+            close()
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = strokeW)
+        )
+        drawCircle(
+            color = color,
+            radius = w * 0.18f,
+            center = Offset(w / 2f, h / 2f)
+        )
+    }
+}
+
+@Composable
+private fun EyeOffIcon(modifier: Modifier = Modifier, color: Color) {
+    Box(modifier = modifier.size(18.dp)) {
+        EyeIcon(modifier = Modifier.fillMaxSize(), color = color.copy(alpha = 0.4f))
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawLine(
+                color = color,
+                start = Offset(0f, size.height),
+                end = Offset(size.width, 0f),
+                strokeWidth = size.width * 0.1f
+            )
+        }
+    }
+}
+
+@Composable
 fun AttendanceScreen() {
     val scope = rememberCoroutineScope()
     var rollNumber by remember { mutableStateOf("") }
@@ -86,13 +137,16 @@ fun AttendanceScreen() {
     var isLoading by remember { mutableStateOf(false) }
     var attendanceData by remember { mutableStateOf<AttendanceResponse?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showValidationDialog by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(SubjectFilter.ALL) }
 
     fun fetchAttendance() {
         if (rollNumber.isBlank() || password.isBlank()) {
-            errorMessage = "Please enter roll number & password"
+            showValidationDialog = true
             return
         }
         isLoading = true
@@ -101,16 +155,103 @@ fun AttendanceScreen() {
             try {
                 attendanceData = AttendanceClient.fetchAttendance(rollNumber, password)
             } catch (e: Exception) {
-                errorMessage = e.message?.ifBlank { null } ?: "Unable to connect to server"
+                val errorMsg = e.message?.ifBlank { null } ?: "Failed to connect to attendance server"
+                errorMessage = errorMsg
+                snackbarHostState.showSnackbar(
+                    message = errorMsg,
+                    duration = SnackbarDuration.Short
+                )
             } finally {
                 isLoading = false
             }
         }
     }
 
+    if (showValidationDialog) {
+        AlertDialog(
+            onDismissRequest = { showValidationDialog = false },
+            containerColor = TrackerColors.SurfaceDark,
+            titleContentColor = TrackerColors.TextPrimary,
+            textContentColor = TrackerColors.TextSecondary,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp)),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(TrackerColors.DangerRose)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "MISSING CREDENTIALS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "Please enter both your Registration Number and Password to fetch attendance.",
+                    fontSize = 12.sp,
+                    color = TrackerColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(TrackerColors.PrimaryWhite)
+                        .clickable { showValidationDialog = false }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "OK",
+                        color = TrackerColors.PureBlack,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        )
+    }
+
     Scaffold(
         containerColor = TrackerColors.PureBlack,
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Box(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(TrackerColors.SurfaceDark)
+                        .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(TrackerColors.DangerRose)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = data.visuals.message,
+                            color = TrackerColors.TextPrimary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        },
         topBar = {
             HeaderBar(
                 isLoggedIn = attendanceData != null,
@@ -140,7 +281,6 @@ fun AttendanceScreen() {
                     isPasswordVisible = isPasswordVisible,
                     onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
                     isLoading = isLoading,
-                    errorMessage = errorMessage,
                     onSubmit = { fetchAttendance() }
                 )
             } else {
@@ -195,7 +335,7 @@ private fun HeaderBar(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "TRACKER",
+                    text = "Attendence Tracker",
                     color = TrackerColors.TextPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
@@ -290,7 +430,6 @@ private fun AuthScreen(
     isPasswordVisible: Boolean,
     onTogglePasswordVisibility: () -> Unit,
     isLoading: Boolean,
-    errorMessage: String?,
     onSubmit: () -> Unit
 ) {
     Column(
@@ -310,22 +449,20 @@ private fun AuthScreen(
         ) {
             Column {
                 Text(
-                    text = "STUDENT PORTAL LOGIN",
+                    text = "STUDENT LOGIN",
                     color = TrackerColors.TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.5.sp
-                )
-                Text(
-                    text = "Sign in to view live attendance & analytics",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+                    letterSpacing = 1.5.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 20.dp)
                 )
 
                 Text(
-                    text = "ROLL NUMBER",
+                    text = "REGISTRATION NUMBER",
                     color = TrackerColors.TextSubtle,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -339,7 +476,7 @@ private fun AuthScreen(
                     onValueChange = onRollNumberChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("e.g. 21L31A0501", color = TrackerColors.TextSubtle, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
+                    placeholder = { Text("e.g. 26L35A4699", color = TrackerColors.TextSubtle, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = TrackerColors.SurfaceInput,
                         unfocusedContainerColor = TrackerColors.SurfaceInput,
@@ -372,19 +509,22 @@ private fun AuthScreen(
                     onValueChange = onPasswordChange,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Portal password", color = TrackerColors.TextSubtle, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
+                    placeholder = { Text("Password", color = TrackerColors.TextSubtle, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
-                        Text(
-                            text = if (isPasswordVisible) "HIDE" else "SHOW",
-                            color = TrackerColors.TextSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                        Box(
                             modifier = Modifier
+                                .clip(CircleShape)
                                 .clickable { onTogglePasswordVisibility() }
-                                .padding(8.dp)
-                        )
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isPasswordVisible) {
+                                EyeIcon(color = TrackerColors.TextSecondary)
+                            } else {
+                                EyeOffIcon(color = TrackerColors.TextMuted)
+                            }
+                        }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = TrackerColors.SurfaceInput,
@@ -442,31 +582,6 @@ private fun AuthScreen(
                             fontFamily = FontFamily.Monospace,
                             letterSpacing = 1.sp
                         )
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = errorMessage != null,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    errorMessage?.let { error ->
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 14.dp)
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(TrackerColors.DangerRoseSubtle)
-                                .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                                .padding(10.dp)
-                        ) {
-                            Text(
-                                text = error,
-                                color = TrackerColors.DangerRose,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
                     }
                 }
             }
