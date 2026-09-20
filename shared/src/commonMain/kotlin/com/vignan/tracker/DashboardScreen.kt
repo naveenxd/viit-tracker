@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 enum class MainNavTab(val label: String) {
     COURSES("COURSES"),
@@ -547,22 +548,30 @@ private fun HeroTerminalCard(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (overallPercentage >= 75.0) "SAFE ZONE" else "CRITICAL",
-                        color = statusColor,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.2.sp
-                    )
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(statusColor.copy(alpha = 0.12f))
+                        .border(1.dp, statusColor.copy(alpha = 0.4f), CircleShape)
+                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(statusColor)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (overallPercentage >= 75.0) "SAFE ZONE" else "CRITICAL",
+                            color = statusColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.2.sp
+                        )
+                    }
                 }
             }
 
@@ -574,15 +583,16 @@ private fun HeroTerminalCard(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Row(verticalAlignment = Alignment.Bottom) {
+                    val pctTenths = (overallPercentage * 10).roundToInt()
                     Text(
-                        text = "${overallPercentage.toInt()}",
+                        text = "${pctTenths / 10}",
                         color = TrackerColors.TextPrimary,
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = ".${((overallPercentage - overallPercentage.toInt()) * 10).toInt()}%",
+                        text = ".${pctTenths % 10}%",
                         color = statusColor,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
@@ -821,7 +831,7 @@ private fun MinimalSubjectRow(subject: UiSubjectAttendance) {
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "${subject.percentage.toInt()}%",
+                        text = "${subject.percentage.roundToInt()}%",
                         color = percentageColor,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Black,
