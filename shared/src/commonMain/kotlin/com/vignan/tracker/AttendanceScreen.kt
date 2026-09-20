@@ -1,5 +1,8 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -259,40 +262,62 @@ fun AttendanceScreen() {
                 .padding(paddingValues)
                 .background(TrackerColors.PureBlack)
         ) {
-            when {
-                isInitializing -> {
-                    DashboardSkeleton()
-                }
-                !isSessionActive -> {
-                    LoginScreen(
-                        rollNumber = rollNumber,
-                        onRollNumberChange = { rollNumber = it },
-                        password = password,
-                        onPasswordChange = { password = it },
-                        isPasswordVisible = isPasswordVisible,
-                        onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
-                        rememberMe = rememberMe,
-                        onRememberMeChange = { rememberMe = it },
-                        isLoading = isLoading,
-                        onSubmit = { fetchAttendance() }
-                    )
-                }
-                attendanceData == null -> {
-                    DashboardSkeleton()
-                }
-                else -> {
-                    DashboardScreen(
-                        data = attendanceData!!,
-                        liveResponse = liveAttendanceResponse,
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        selectedFilter = selectedFilter,
-                        onFilterSelect = { selectedFilter = it }
-                    )
+            val screenState = when {
+                isInitializing -> MainScreenState.LOADING
+                !isSessionActive -> MainScreenState.LOGIN
+                attendanceData == null -> MainScreenState.LOADING
+                else -> MainScreenState.DASHBOARD
+            }
+
+            Crossfade(
+                targetState = screenState,
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+                label = "mainScreenTransition"
+            ) { state ->
+                when (state) {
+                    MainScreenState.LOADING -> {
+                        DashboardSkeleton()
+                    }
+                    MainScreenState.LOGIN -> {
+                        LoginScreen(
+                            rollNumber = rollNumber,
+                            onRollNumberChange = { rollNumber = it },
+                            password = password,
+                            onPasswordChange = { password = it },
+                            isPasswordVisible = isPasswordVisible,
+                            onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
+                            rememberMe = rememberMe,
+                            onRememberMeChange = { rememberMe = it },
+                            isLoading = isLoading,
+                            onSubmit = { fetchAttendance() }
+                        )
+                    }
+                    MainScreenState.DASHBOARD -> {
+                        val data = attendanceData
+                        if (data != null) {
+                            DashboardScreen(
+                                data = data,
+                                liveResponse = liveAttendanceResponse,
+                                searchQuery = searchQuery,
+                                onSearchQueryChange = { searchQuery = it },
+                                selectedFilter = selectedFilter,
+                                onFilterSelect = { selectedFilter = it }
+                            )
+                        } else {
+                            // Exits can race the crossfade — fall back gracefully instead of crashing.
+                            DashboardSkeleton()
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private enum class MainScreenState {
+    LOADING,
+    LOGIN,
+    DASHBOARD
 }
 
 private fun mapApiErrorToUserMessage(error: Throwable): String {
