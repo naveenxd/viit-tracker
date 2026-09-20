@@ -284,7 +284,6 @@ fun AttendanceScreen() {
                     DashboardScreen(
                         data = attendanceData!!,
                         liveResponse = liveAttendanceResponse,
-                        onSimulateBunk = { req -> repository.simulateBunk(req) },
                         searchQuery = searchQuery,
                         onSearchQueryChange = { searchQuery = it },
                         selectedFilter = selectedFilter,
