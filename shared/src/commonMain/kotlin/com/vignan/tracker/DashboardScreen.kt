@@ -1,14 +1,21 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +25,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -26,33 +35,37 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 
-enum class DashboardTab {
-    COURSES, TIMETABLE, FACULTY
+enum class MainNavTab(val label: String) {
+    COURSES("COURSES"),
+    TIMETABLE("TIMETABLE")
 }
 
 @Composable
@@ -88,22 +101,10 @@ fun DashboardSkeleton() {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(210.dp)
+                .height(190.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(brush)
                 .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Tab Selector Skeleton
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(brush)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -127,14 +128,12 @@ fun DashboardSkeleton() {
 fun DashboardScreen(
     data: AttendanceResponse,
     liveResponse: LiveAttendanceResponse? = null,
-    onSimulateBunk: suspend (SimulateBunkRequest) -> Result<SimulateBunkResponse> = { Result.failure(Exception()) },
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     selectedFilter: SubjectFilter,
     onFilterSelect: (SubjectFilter) -> Unit
 ) {
-    var activeTab by remember { mutableStateOf(DashboardTab.COURSES) }
-    var showBunkSimulator by remember { mutableStateOf(false) }
+    var selectedNavTab by remember { mutableStateOf(MainNavTab.COURSES) }
 
     val totalAttended = data.subjects.sumOf { it.attended }
     val totalConducted = data.subjects.sumOf { it.conducted }
@@ -154,103 +153,213 @@ fun DashboardScreen(
     val atRiskCount = data.subjects.count { it.percentage < 75.0 }
     val safeCount = data.subjects.count { it.percentage >= 75.0 }
 
-    if (showBunkSimulator && liveResponse != null) {
-        SimulateBunkDialog(
-            currentAttended = totalAttended,
-            currentHeld = totalConducted,
-            onSimulate = onSimulateBunk,
-            onDismiss = { showBunkSimulator = false }
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 86.dp)
+        ) {
+            when (selectedNavTab) {
+                MainNavTab.COURSES -> {
+                    item {
+                        HeroTerminalCard(
+                            studentName = data.studentName,
+                            rollNumber = data.rollNumber,
+                            branch = liveResponse?.profile?.branch.orEmpty(),
+                            semester = liveResponse?.profile?.semester ?: "",
+                            overallPercentage = data.overallPercentage,
+                            totalAttended = totalAttended,
+                            totalConducted = totalConducted,
+                            overallInsight = overallInsight,
+                            liveResponse = liveResponse
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
+                    item {
+                        FilterToolbar(
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = onSearchQueryChange,
+                            selectedFilter = selectedFilter,
+                            onFilterSelect = onFilterSelect,
+                            totalCount = data.subjects.size,
+                            atRiskCount = atRiskCount,
+                            safeCount = safeCount
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    if (filteredSubjects.isEmpty()) {
+                        item {
+                            EmptyStateView("NO MATCHING COURSES", "Adjust search query or active filter tab")
+                        }
+                    } else {
+                        items(filteredSubjects) { subject ->
+                            MinimalSubjectRow(subject = subject)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+
+                MainNavTab.TIMETABLE -> {
+                    item {
+                        TimetableScreen(liveResponse = liveResponse)
+                    }
+                }
+            }
+
+            // Bottom Footer Badge
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                FooterBadge()
+            }
+        }
+
+        // Floating pill navigation bar
+        ExpressiveFloatingPillNavBar(
+            selectedTab = selectedNavTab,
+            onTabSelected = { selectedNavTab = it },
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
+}
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+@Composable
+fun ExpressiveFloatingPillNavBar(
+    selectedTab: MainNavTab,
+    onTabSelected: (MainNavTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tabs = MainNavTab.entries
+    val selectedIndex = selectedTab.ordinal
+
+    val tabWidth = 118.dp
+    val tabGap = 2.dp
+
+    // Spring-physics highlight that glides between tabs
+    val indicatorOffset by animateDpAsState(
+        targetValue = (tabWidth + tabGap) * selectedIndex,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 420f),
+        label = "navIndicatorOffset"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
-        item {
-            HeroTerminalCard(
-                studentName = data.studentName,
-                rollNumber = data.rollNumber,
-                branch = liveResponse?.profile?.branch ?: "CSE",
-                semester = liveResponse?.profile?.semester ?: "",
-                overallPercentage = data.overallPercentage,
-                totalAttended = totalAttended,
-                totalConducted = totalConducted,
-                overallInsight = overallInsight,
-                liveResponse = liveResponse,
-                onOpenSimulator = { showBunkSimulator = true }
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-        }
+        Surface(
+            shape = CircleShape,
+            color = TrackerColors.SurfaceDark,
+            shadowElevation = 12.dp,
+            border = BorderStroke(1.dp, TrackerColors.HairlineBorder)
+        ) {
+            Box(modifier = Modifier.padding(5.dp)) {
+                // Sliding highlight capsule behind the tabs
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffset)
+                        .size(width = tabWidth, height = 40.dp)
+                        .clip(CircleShape)
+                        .background(TrackerColors.SurfaceElevated)
+                        .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
+                )
 
-        item {
-            TabNavigationRow(
-                activeTab = activeTab,
-                onTabSelect = { activeTab = it }
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(tabGap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEach { tab ->
+                        val isSelected = tab == selectedTab
+                        val contentColor by animateColorAsState(
+                            targetValue = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
+                            animationSpec = tween(220),
+                            label = "navTabColor-${tab.name}"
+                        )
+                        val iconScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.92f,
+                            animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
+                            label = "navIconScale-${tab.name}"
+                        )
 
-        when (activeTab) {
-            DashboardTab.COURSES -> {
-                item {
-                    FilterToolbar(
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = onSearchQueryChange,
-                        selectedFilter = selectedFilter,
-                        onFilterSelect = onFilterSelect,
-                        totalCount = data.subjects.size,
-                        atRiskCount = atRiskCount,
-                        safeCount = safeCount
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                if (filteredSubjects.isEmpty()) {
-                    item {
-                        EmptyStateView("NO MATCHING COURSES", "Adjust search query or active filter tab")
-                    }
-                } else {
-                    items(filteredSubjects) { subject ->
-                        MinimalSubjectRow(subject = subject)
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
-            }
-
-            DashboardTab.TIMETABLE -> {
-                val timetable = liveResponse?.attendance?.timetable ?: emptyList()
-                if (timetable.isEmpty()) {
-                    item {
-                        EmptyStateView("NO TIMETABLE AVAILABLE", "Timetable data not published for this profile")
-                    }
-                } else {
-                    items(timetable) { day ->
-                        TimetableDayCard(day = day)
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                }
-            }
-
-            DashboardTab.FACULTY -> {
-                val facultyList = liveResponse?.attendance?.faculty ?: emptyList()
-                if (facultyList.isEmpty()) {
-                    item {
-                        EmptyStateView("NO FACULTY DATA", "Faculty allocation details not published yet")
-                    }
-                } else {
-                    items(facultyList) { faculty ->
-                        FacultyRowCard(faculty = faculty)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(tabWidth)
+                                .height(40.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { onTabSelected(tab) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                NavTabIcon(tab = tab, color = contentColor, scale = iconScale)
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Text(
+                                    text = tab.label,
+                                    color = contentColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    letterSpacing = 1.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
 
-        // Bottom Footer Badge
-        item {
-            Spacer(modifier = Modifier.height(12.dp))
-            FooterBadge()
+@Composable
+private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
+    Canvas(
+        modifier = Modifier
+            .size(16.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+    ) {
+        when (tab) {
+            MainNavTab.COURSES -> {
+                // 2x2 course grid
+                val cell = size.width * 0.42f
+                val gap = size.width - cell * 2f
+                val r = CornerRadius(cell * 0.32f, cell * 0.32f)
+                drawRoundRect(color, Offset.Zero, Size(cell, cell), r)
+                drawRoundRect(color, Offset(cell + gap, 0f), Size(cell, cell), r)
+                drawRoundRect(color, Offset(0f, cell + gap), Size(cell, cell), r)
+                drawRoundRect(color, Offset(cell + gap, cell + gap), Size(cell, cell), r)
+            }
+
+            MainNavTab.TIMETABLE -> {
+                // Calendar with binder rings + a today dot
+                val w = size.width
+                val h = size.height
+                val strokeW = w * 0.085f
+                val bodyTop = h * 0.16f
+
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(0f, bodyTop),
+                    size = Size(w, h - bodyTop),
+                    cornerRadius = CornerRadius(w * 0.2f, w * 0.2f),
+                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                )
+                drawLine(color, Offset(w * 0.3f, 0f), Offset(w * 0.3f, h * 0.24f), strokeW, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.7f, 0f), Offset(w * 0.7f, h * 0.24f), strokeW, StrokeCap.Round)
+                drawLine(color, Offset(0f, h * 0.42f), Offset(w, h * 0.42f), strokeW)
+                drawCircle(color, radius = w * 0.1f, center = Offset(w * 0.3f, h * 0.68f))
+                drawLine(color, Offset(w * 0.48f, h * 0.68f), Offset(w * 0.8f, h * 0.68f), strokeW, StrokeCap.Round)
+            }
         }
     }
 }
@@ -389,8 +498,7 @@ private fun HeroTerminalCard(
     totalAttended: Int,
     totalConducted: Int,
     overallInsight: AttendanceInsight,
-    liveResponse: LiveAttendanceResponse?,
-    onOpenSimulator: () -> Unit
+    liveResponse: LiveAttendanceResponse?
 ) {
     val statusColor = when {
         overallPercentage >= 80.0 -> TrackerColors.SafeEmerald
@@ -426,10 +534,16 @@ private fun HeroTerminalCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (branch.isNotBlank() || semester.isNotBlank()) "$rollNumber  •  $branch $semester" else rollNumber,
+                        text = listOfNotNull(
+                            rollNumber.takeIf { it.isNotBlank() },
+                            branch.takeIf { it.isNotBlank() },
+                            semester.takeIf { it.isNotBlank() }
+                        ).joinToString("  •  ").ifBlank { rollNumber },
                         color = TrackerColors.TextMuted,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -516,102 +630,38 @@ private fun HeroTerminalCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Intelligence Safe Skips Callout + Simulator Launcher
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(TrackerColors.PureBlack)
-                        .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                        .padding(10.dp)
-                ) {
-                    Text(
-                        text = when {
-                            safeSkips != null -> {
-                                if (safeSkips.status.equals("Safe", ignoreCase = true)) {
-                                    "Safe Skips: ${safeSkips.days} days (${safeSkips.periods} periods) buffer remaining."
-                                } else {
-                                    "Action Needed: Attend next ${safeSkips.classesNeededToRecover} classes to reach 75%."
-                                }
-                            }
-                            overallInsight is AttendanceInsight.Safe -> {
-                                if (overallInsight.canSkipClasses > 0)
-                                    "Buffer: Can safely skip ${overallInsight.canSkipClasses} total classes."
-                                else
-                                    "Boundary: Maintain attendance to prevent drop below 75%."
-                            }
-                            overallInsight is AttendanceInsight.AtRisk -> {
-                                "Action: Attend next ${overallInsight.requiredClasses} consecutive classes."
-                            }
-                            else -> "Target: 75% attendance threshold"
-                        },
-                        color = TrackerColors.TextSecondary,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Serif
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(TrackerColors.SurfaceElevated)
-                        .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(8.dp))
-                        .clickable { onOpenSimulator() }
-                        .padding(horizontal = 10.dp, vertical = 10.dp)
-                ) {
-                    Text(
-                        text = "SIMULATE",
-                        color = TrackerColors.PrimaryWhite,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TabNavigationRow(
-    activeTab: DashboardTab,
-    onTabSelect: (DashboardTab) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        DashboardTab.entries.forEach { tab ->
-            val isSelected = tab == activeTab
+            // Intelligence Safe Skips Callout
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isSelected) TrackerColors.SurfaceElevated else TrackerColors.SurfaceDark)
-                    .clickable { onTabSelect(tab) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(TrackerColors.PureBlack)
+                    .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+                    .padding(10.dp)
             ) {
                 Text(
-                    text = tab.name,
-                    color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
+                    text = when {
+                        safeSkips != null -> {
+                            if (safeSkips.status.equals("Safe", ignoreCase = true)) {
+                                "Safe Skips: ${safeSkips.days} days (${safeSkips.periods} periods) buffer remaining."
+                            } else {
+                                "Action Needed: Attend next ${safeSkips.classesNeededToRecover} classes to reach 75%."
+                            }
+                        }
+                        overallInsight is AttendanceInsight.Safe -> {
+                            if (overallInsight.canSkipClasses > 0)
+                                "Buffer: Can safely skip ${overallInsight.canSkipClasses} total classes."
+                            else
+                                "Boundary: Maintain attendance to prevent drop below 75%."
+                        }
+                        overallInsight is AttendanceInsight.AtRisk -> {
+                            "Action: Attend next ${overallInsight.requiredClasses} consecutive classes."
+                        }
+                        else -> "Target: 75% attendance threshold"
+                    },
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Serif
                 )
             }
         }
@@ -815,101 +865,6 @@ private fun MinimalSubjectRow(subject: UiSubjectAttendance) {
 }
 
 @Composable
-private fun TimetableDayCard(day: TimetableDay) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
-            .padding(14.dp)
-    ) {
-        Column {
-            Text(
-                text = day.day.uppercase(),
-                color = TrackerColors.PrimaryWhite,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            day.periods.forEach { period ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = period.subject,
-                            color = TrackerColors.TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = FontFamily.SansSerif
-                        )
-                        Text(
-                            text = "Period ${period.slotNumber}  •  ${period.time}",
-                            color = TrackerColors.TextSubtle,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FacultyRowCard(faculty: FacultyAllocation) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
-            .padding(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-                Text(
-                    text = faculty.code.ifBlank { "COURSE" },
-                    color = TrackerColors.TextMuted,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = faculty.subject,
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.SansSerif,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Text(
-                text = faculty.faculty,
-                color = TrackerColors.PrimaryWhite,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-    }
-}
-
-@Composable
 private fun EmptyStateView(title: String, subtitle: String) {
     Box(
         modifier = Modifier
@@ -935,162 +890,4 @@ private fun EmptyStateView(title: String, subtitle: String) {
             )
         }
     }
-}
-
-@Composable
-private fun SimulateBunkDialog(
-    currentAttended: Int,
-    currentHeld: Int,
-    onSimulate: suspend (SimulateBunkRequest) -> Result<SimulateBunkResponse>,
-    onDismiss: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    var fullDaysLeave by remember { mutableStateOf("1") }
-    var periodsToday by remember { mutableStateOf("0") }
-    var isSimulating by remember { mutableStateOf(false) }
-    var simulationResult by remember { mutableStateOf<SimulateBunkResponse?>(null) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = TrackerColors.SurfaceDark,
-        titleContentColor = TrackerColors.TextPrimary,
-        textContentColor = TrackerColors.TextSecondary,
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp)),
-        title = {
-            Text(
-                text = "BUNK SIMULATOR",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = "FULL DAYS LEAVE",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                OutlinedTextField(
-                    value = fullDaysLeave,
-                    onValueChange = { fullDaysLeave = it },
-                    singleLine = true,
-                    textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TrackerColors.TextPrimary),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = TrackerColors.SurfaceInput,
-                        unfocusedContainerColor = TrackerColors.SurfaceInput,
-                        focusedBorderColor = TrackerColors.HairlineBorderLight,
-                        unfocusedBorderColor = TrackerColors.HairlineBorder
-                    ),
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp)
-                )
-
-                simulationResult?.let { res ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TrackerColors.PureBlack)
-                            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                            .padding(10.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "SIMULATED RESULT",
-                                color = TrackerColors.TextMuted,
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "${res.simulated.percentage}%",
-                                    color = if (res.simulated.meetsTarget) TrackerColors.SafeEmerald else TrackerColors.DangerRose,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = "-${res.simulated.dropInPercentage}% drop",
-                                    color = TrackerColors.DangerRose,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-                    }
-                }
-
-                errorMsg?.let { err ->
-                    Text(
-                        text = err,
-                        color = TrackerColors.DangerRose,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(TrackerColors.PrimaryWhite)
-                    .clickable(enabled = !isSimulating) {
-                        isSimulating = true
-                        errorMsg = null
-                        scope.launch {
-                            val days = fullDaysLeave.toIntOrNull() ?: 0
-                            val res = onSimulate(
-                                SimulateBunkRequest(
-                                    currentAttended = currentAttended,
-                                    currentHeld = currentHeld,
-                                    selectedPeriodsToday = emptyList(),
-                                    fullDaysLeave = days
-                                )
-                            )
-                            res.fold(
-                                onSuccess = { simulationResult = it },
-                                onFailure = { errorMsg = "Simulation failed" }
-                            )
-                            isSimulating = false
-                        }
-                    }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = if (isSimulating) "CALCULATING..." else "CALCULATE",
-                    color = TrackerColors.PureBlack,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        },
-        dismissButton = {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(TrackerColors.SurfaceDark)
-                    .clickable { onDismiss() }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = "CLOSE",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-    )
 }
