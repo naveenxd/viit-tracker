@@ -49,6 +49,7 @@ fun AttendanceScreen() {
     var isSessionActive by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
+    var liveAttendanceResponse by remember { mutableStateOf<LiveAttendanceResponse?>(null) }
     var attendanceData by remember { mutableStateOf<AttendanceResponse?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showValidationDialog by remember { mutableStateOf(false) }
@@ -71,6 +72,7 @@ fun AttendanceScreen() {
             isSessionActive = true
 
             if (cached != null) {
+                liveAttendanceResponse = cached
                 attendanceData = cached.toAttendanceResponse()
             }
 
@@ -85,8 +87,9 @@ fun AttendanceScreen() {
                     currentTimeMs = now
                 )
                 result.fold(
-                    onSuccess = { liveResponse ->
-                        attendanceData = liveResponse.toAttendanceResponse()
+                    onSuccess = { liveResp ->
+                        liveAttendanceResponse = liveResp
+                        attendanceData = liveResp.toAttendanceResponse()
                     },
                     onFailure = { error ->
                         val friendlyMsg = mapApiErrorToUserMessage(error)
@@ -129,8 +132,9 @@ fun AttendanceScreen() {
                 rememberMe = rememberMe
             )
             result.fold(
-                onSuccess = { liveResponse ->
-                    attendanceData = liveResponse.toAttendanceResponse()
+                onSuccess = { liveResp ->
+                    liveAttendanceResponse = liveResp
+                    attendanceData = liveResp.toAttendanceResponse()
                 },
                 onFailure = { error ->
                     val friendlyMsg = mapApiErrorToUserMessage(error)
@@ -241,6 +245,7 @@ fun AttendanceScreen() {
                 onLogout = {
                     scope.launch { repository.logout() }
                     isSessionActive = false
+                    liveAttendanceResponse = null
                     attendanceData = null
                     password = ""
                     errorMessage = null
@@ -278,6 +283,8 @@ fun AttendanceScreen() {
                 else -> {
                     DashboardScreen(
                         data = attendanceData!!,
+                        liveResponse = liveAttendanceResponse,
+                        onSimulateBunk = { req -> repository.simulateBunk(req) },
                         searchQuery = searchQuery,
                         onSearchQueryChange = { searchQuery = it },
                         selectedFilter = selectedFilter,
