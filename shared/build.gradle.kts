@@ -46,19 +46,22 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
 
-            // Kotlinx Serialization
+            // Kotlinx Serialization & Coroutines
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+
+            // Ktor Client (Common)
+            implementation("io.ktor:ktor-client-core:2.3.12")
+            implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
         }
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
+            implementation(libs.androidx.security.crypto)
 
-            // Ktor Client for Android
-            implementation("io.ktor:ktor-client-core:2.3.12")
+            // Ktor Engine for Android
             implementation("io.ktor:ktor-client-okhttp:2.3.12")
-            implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-            implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
