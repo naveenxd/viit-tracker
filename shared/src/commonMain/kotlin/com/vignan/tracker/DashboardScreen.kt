@@ -36,6 +36,67 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+
+@Composable
+fun DashboardSkeleton() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(190.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(TrackerColors.SurfaceDark.copy(alpha = alpha))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(TrackerColors.SurfaceDark.copy(alpha = alpha))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        repeat(4) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(TrackerColors.SurfaceDark.copy(alpha = alpha))
+                    .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
 @Composable
 fun DashboardScreen(
     data: AttendanceResponse,

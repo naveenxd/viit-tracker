@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +54,8 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     isPasswordVisible: Boolean,
     onTogglePasswordVisibility: () -> Unit,
+    rememberMe: Boolean = true,
+    onRememberMeChange: (Boolean) -> Unit = {},
     isLoading: Boolean,
     onSubmit: () -> Unit
 ) {
@@ -206,7 +209,44 @@ fun LoginScreen(
                     })
                 )
 
-                Spacer(modifier = Modifier.height(22.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Keep Me Logged In Checkbox Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onRememberMeChange(!rememberMe) }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (rememberMe) TrackerColors.PrimaryWhite else TrackerColors.SurfaceInput)
+                            .border(1.dp, if (rememberMe) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder, RoundedCornerShape(4.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (rememberMe) {
+                            Text(
+                                text = "✓",
+                                color = TrackerColors.PureBlack,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "KEEP ME LOGGED IN",
+                        color = TrackerColors.TextSecondary,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
                     onClick = {

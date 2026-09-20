@@ -43,7 +43,12 @@ fun AttendanceScreen() {
     var rollNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(true) }
+
+    var isInitializing by remember { mutableStateOf(true) }
+    var isSessionActive by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+
     var attendanceData by remember { mutableStateOf<AttendanceResponse?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showValidationDialog by remember { mutableStateOf(false) }
@@ -53,22 +58,42 @@ fun AttendanceScreen() {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(SubjectFilter.ALL) }
 
-    // Auto-login on launch if stored credentials exist
+    // Instant launch: Load stored session & cache immediately without showing login screen
     LaunchedEffect(Unit) {
         val stored = repository.getStoredCredentials()
-        if (stored != null) {
+        val cached = repository.getCachedAttendanceResponse()
+        val now = System.currentTimeMillis()
+
+        if (stored != null && repository.isSessionValid(stored, now)) {
             rollNumber = stored.rollNo
             password = stored.password
+            rememberMe = stored.rememberMe
+            isSessionActive = true
+
+            if (cached != null) {
+                attendanceData = cached.toAttendanceResponse()
+            }
+
+            isInitializing = false
             isLoading = true
+
             scope.launch {
-                val result = repository.fetchLiveAttendance()
+                val result = repository.fetchLiveAttendance(
+                    rollNo = stored.rollNo,
+                    password = stored.password,
+                    rememberMe = stored.rememberMe,
+                    currentTimeMs = now
+                )
                 result.fold(
                     onSuccess = { liveResponse ->
                         attendanceData = liveResponse.toAttendanceResponse()
                     },
                     onFailure = { error ->
                         val friendlyMsg = mapApiErrorToUserMessage(error)
-                        errorMessage = friendlyMsg
+                        if (attendanceData == null) {
+                            errorMessage = friendlyMsg
+                            isSessionActive = false
+                        }
                         snackbarHostState.showSnackbar(
                             message = friendlyMsg,
                             duration = SnackbarDuration.Short
@@ -77,6 +102,13 @@ fun AttendanceScreen() {
                 )
                 isLoading = false
             }
+        } else {
+            if (stored != null) {
+                rollNumber = stored.rollNo
+                rememberMe = stored.rememberMe
+            }
+            isSessionActive = false
+            isInitializing = false
         }
     }
 
@@ -85,10 +117,17 @@ fun AttendanceScreen() {
             showValidationDialog = true
             return
         }
+
+        isSessionActive = true
         isLoading = true
         errorMessage = null
+
         scope.launch {
-            val result = repository.fetchLiveAttendance(rollNumber, password)
+            val result = repository.fetchLiveAttendance(
+                rollNo = rollNumber,
+                password = password,
+                rememberMe = rememberMe
+            )
             result.fold(
                 onSuccess = { liveResponse ->
                     attendanceData = liveResponse.toAttendanceResponse()
@@ -96,6 +135,9 @@ fun AttendanceScreen() {
                 onFailure = { error ->
                     val friendlyMsg = mapApiErrorToUserMessage(error)
                     errorMessage = friendlyMsg
+                    if (attendanceData == null) {
+                        isSessionActive = false
+                    }
                     snackbarHostState.showSnackbar(
                         message = friendlyMsg,
                         duration = SnackbarDuration.Short
@@ -193,11 +235,12 @@ fun AttendanceScreen() {
         },
         topBar = {
             HeaderBar(
-                isLoggedIn = attendanceData != null,
+                isLoggedIn = isSessionActive,
                 isLoading = isLoading,
                 onRefresh = { fetchAttendance() },
                 onLogout = {
                     scope.launch { repository.logout() }
+                    isSessionActive = false
                     attendanceData = null
                     password = ""
                     errorMessage = null
@@ -211,25 +254,36 @@ fun AttendanceScreen() {
                 .padding(paddingValues)
                 .background(TrackerColors.PureBlack)
         ) {
-            if (attendanceData == null) {
-                LoginScreen(
-                    rollNumber = rollNumber,
-                    onRollNumberChange = { rollNumber = it },
-                    password = password,
-                    onPasswordChange = { password = it },
-                    isPasswordVisible = isPasswordVisible,
-                    onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
-                    isLoading = isLoading,
-                    onSubmit = { fetchAttendance() }
-                )
-            } else {
-                DashboardScreen(
-                    data = attendanceData!!,
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it },
-                    selectedFilter = selectedFilter,
-                    onFilterSelect = { selectedFilter = it }
-                )
+            when {
+                isInitializing -> {
+                    DashboardSkeleton()
+                }
+                !isSessionActive -> {
+                    LoginScreen(
+                        rollNumber = rollNumber,
+                        onRollNumberChange = { rollNumber = it },
+                        password = password,
+                        onPasswordChange = { password = it },
+                        isPasswordVisible = isPasswordVisible,
+                        onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
+                        rememberMe = rememberMe,
+                        onRememberMeChange = { rememberMe = it },
+                        isLoading = isLoading,
+                        onSubmit = { fetchAttendance() }
+                    )
+                }
+                attendanceData == null -> {
+                    DashboardSkeleton()
+                }
+                else -> {
+                    DashboardScreen(
+                        data = attendanceData!!,
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        selectedFilter = selectedFilter,
+                        onFilterSelect = { selectedFilter = it }
+                    )
+                }
             }
         }
     }
