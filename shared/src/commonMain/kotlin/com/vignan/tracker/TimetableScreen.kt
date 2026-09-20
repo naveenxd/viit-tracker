@@ -501,13 +501,17 @@ private fun GhostRowCard(
 
 @Composable
 private fun NoClassesCard(isSunday: Boolean) {
+    // Match the slot grid's exact height so switching days never shifts content.
+    val gridHeight = SLOT_ROW_H * SLOTS.size + SLOT_GAP * (SLOTS.size - 1)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .height(gridHeight)
             .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
-            .padding(horizontal = 20.dp, vertical = 40.dp),
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
