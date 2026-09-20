@@ -11,6 +11,7 @@ object AppContextProvider {
 
 class AndroidCredentialStore(private val contextProvider: () -> Context?) : CredentialStore {
     private var inMemoryCreds: StoredCredentials? = null
+    private var inMemoryCache: String? = null
 
     private fun getPrefs(): SharedPreferences? {
         val ctx = contextProvider() ?: return null
@@ -33,7 +34,9 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         val prefs = getPrefs() ?: return inMemoryCreds
         val roll = prefs.getString("roll", null) ?: return inMemoryCreds
         val pass = prefs.getString("pwd", null) ?: return inMemoryCreds
-        return StoredCredentials(roll, pass)
+        val rememberMe = prefs.getBoolean("remember_me", true)
+        val timestamp = prefs.getLong("last_login_ts", System.currentTimeMillis())
+        return StoredCredentials(roll, pass, rememberMe, timestamp)
     }
 
     override suspend fun save(creds: StoredCredentials) {
@@ -42,13 +45,27 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         prefs.edit()
             .putString("roll", creds.rollNo)
             .putString("pwd", creds.password)
+            .putBoolean("remember_me", creds.rememberMe)
+            .putLong("last_login_ts", creds.lastLoginTimestamp)
             .apply()
     }
 
     override suspend fun clear() {
         inMemoryCreds = null
+        inMemoryCache = null
         val prefs = getPrefs() ?: return
         prefs.edit().clear().apply()
+    }
+
+    override suspend fun getCachedAttendance(): String? {
+        val prefs = getPrefs() ?: return inMemoryCache
+        return prefs.getString("cached_attendance_json", null) ?: inMemoryCache
+    }
+
+    override suspend fun saveCachedAttendance(json: String) {
+        inMemoryCache = json
+        val prefs = getPrefs() ?: return
+        prefs.edit().putString("cached_attendance_json", json).apply()
     }
 }
 
