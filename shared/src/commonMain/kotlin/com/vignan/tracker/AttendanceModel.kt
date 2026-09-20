@@ -3,7 +3,7 @@ package com.vignan.tracker
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SubjectAttendance(
+data class UiSubjectAttendance(
     val code: String,
     val name: String,
     val attended: Int,
@@ -16,5 +16,5 @@ data class AttendanceResponse(
     val studentName: String,
     val rollNumber: String,
     val overallPercentage: Double,
-    val subjects: List<SubjectAttendance>
+    val subjects: List<UiSubjectAttendance>
 )
