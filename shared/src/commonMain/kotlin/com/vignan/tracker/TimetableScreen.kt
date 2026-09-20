@@ -309,10 +309,6 @@ fun TimetableScreen(
             }
         }
 
-        if (facultyList.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(18.dp))
-            FacultyEntryButton(count = facultyList.size) { showFacultyDialog = true }
-        }
     }
 
     if (showFacultyDialog) {
@@ -788,56 +784,44 @@ private fun DaySelectorTabs(
 
 // ===================== Faculty dialog =====================
 
+/** Compact faculty trigger that sits beside the day selector, away from the nav bar. */
 @Composable
-private fun FacultyEntryButton(count: Int, onClick: () -> Unit) {
+private fun FacultyChip(count: Int, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 13.dp)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "FACULTY & COURSES",
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.2.sp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(TrackerColors.SurfaceElevated)
-                        .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
-                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "$count",
-                        color = TrackerColors.TextSecondary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "VIEW  ›",
-                color = TrackerColors.TextMuted,
+                text = "FACULTY",
+                color = TrackerColors.TextSecondary,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.sp
             )
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(TrackerColors.SurfaceElevated)
+                    .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
+                    .padding(horizontal = 6.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    text = "$count",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
     }
 }
