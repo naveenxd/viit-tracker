@@ -261,25 +261,38 @@ fun TimetableScreen(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // Section header — straight from the student's profile
-        Column(modifier = Modifier.padding(bottom = 14.dp)) {
-            Text(
-                text = if (semesterLabel != null) "VIGNAN'S IIT  •  ${semesterLabel.uppercase()}" else "VIGNAN'S IIT",
-                color = TrackerColors.TextMuted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp
-            )
-            Text(
-                text = branchLabel ?: "TIMETABLE",
-                color = TrackerColors.TextPrimary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Serif,
-                letterSpacing = 0.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (semesterLabel != null) "VIGNAN'S IIT  •  ${semesterLabel.uppercase()}" else "VIGNAN'S IIT",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.2.sp
+                )
+                Text(
+                    text = branchLabel ?: "TIMETABLE",
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Serif,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (facultyList.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(10.dp))
+                FacultyChip(count = facultyList.size) { showFacultyDialog = true }
+            }
         }
 
         if (weekly.isEmpty()) {
