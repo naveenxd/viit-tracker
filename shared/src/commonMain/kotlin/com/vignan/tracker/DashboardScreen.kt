@@ -1,6 +1,7 @@
 package com.vignan.tracker
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
@@ -41,6 +42,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,8 +62,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 enum class MainNavTab(val label: String) {
     COURSES("COURSES"),
@@ -70,26 +74,25 @@ enum class MainNavTab(val label: String) {
 
 @Composable
 fun DashboardSkeleton() {
+    // Diagonal light sweep shared by every ghost element
     val transition = rememberInfiniteTransition()
     val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
+        initialValue = -500f,
+        targetValue = 1600f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         )
     )
 
-    val shimmerColors = listOf(
-        TrackerColors.SurfaceDark,
-        TrackerColors.SurfaceElevated.copy(alpha = 0.8f),
-        TrackerColors.SurfaceDark
-    )
-
     val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(translateAnim - 300f, translateAnim - 300f),
-        end = Offset(translateAnim, translateAnim)
+        colors = listOf(
+            TrackerColors.SurfaceDark,
+            TrackerColors.SurfaceElevated.copy(alpha = 0.85f),
+            TrackerColors.SurfaceDark
+        ),
+        start = Offset(translateAnim, translateAnim * 0.35f),
+        end = Offset(translateAnim + 420f, translateAnim * 0.35f + 420f)
     )
 
     Column(
@@ -97,30 +100,201 @@ fun DashboardSkeleton() {
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        // Hero Terminal Skeleton
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(190.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(brush)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-        )
+        StaggeredAppear(index = 0) { SkeletonHeroCard(brush) }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Cards Skeleton
-        repeat(4) {
+        repeat(4) { i ->
+            StaggeredAppear(index = i + 1) { SkeletonSubjectRow(brush) }
+            if (i < 3) Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        LoadingCaption()
+    }
+}
+
+/** Fades/slides each skeleton block in with a per-index delay. */
+@Composable
+private fun StaggeredAppear(index: Int, content: @Composable () -> Unit) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(index * 70L)
+        shown = true
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        label = "skeletonStagger-$index"
+    )
+
+    Box(
+        modifier = Modifier.graphicsLayer {
+            alpha = progress
+            translationY = (1f - progress) * 24.dp.toPx()
+        }
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun GhostBar(modifier: Modifier, brush: Brush, cornerRadius: Dp = 6.dp) {
+    Box(modifier.clip(RoundedCornerShape(cornerRadius)).background(brush))
+}
+
+/** Hero ghost with internal detail bars mirroring the real card's anatomy. */
+@Composable
+private fun SkeletonHeroCard(brush: Brush) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(190.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(RoundedCornerShape(14.dp))
+                .background(brush)
+        )
+
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    GhostBar(modifier = Modifier.width(110.dp).height(12.dp), brush)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    GhostBar(modifier = Modifier.width(72.dp).height(8.dp), brush, cornerRadius = 4.dp)
+                }
+                GhostBar(
+                    modifier = Modifier.width(88.dp).height(20.dp),
+                    brush,
+                    cornerRadius = 10.dp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            GhostBar(modifier = Modifier.width(132.dp).height(42.dp), brush, cornerRadius = 8.dp)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(76.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(brush)
-                    .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(TrackerColors.PureBlack)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(brush)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            GhostBar(
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                brush,
+                cornerRadius = 8.dp
             )
-            Spacer(modifier = Modifier.height(8.dp))
         }
+    }
+}
+
+/** Subject-row ghost matching MinimalSubjectRow's real layout. */
+@Composable
+private fun SkeletonSubjectRow(brush: Brush) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(76.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(RoundedCornerShape(10.dp))
+                .background(brush)
+        )
+
+        Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GhostBar(modifier = Modifier.width(64.dp).height(8.dp), brush, cornerRadius = 4.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        GhostBar(modifier = Modifier.width(42.dp).height(8.dp), brush, cornerRadius = 4.dp)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    GhostBar(modifier = Modifier.width(150.dp).height(12.dp), brush)
+                }
+                GhostBar(modifier = Modifier.width(46.dp).height(16.dp), brush, cornerRadius = 4.dp)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .clip(CircleShape)
+                    .background(TrackerColors.PureBlack)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .height(2.dp)
+                        .clip(CircleShape)
+                        .background(brush)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingCaption() {
+    val transition = rememberInfiniteTransition()
+    val alpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "FETCHING LATEST DATA",
+            color = TrackerColors.TextMuted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.graphicsLayer { this.alpha = alpha }
+        )
     }
 }
 
