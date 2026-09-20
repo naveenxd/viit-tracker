@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,11 +17,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,8 +42,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
@@ -73,6 +81,10 @@ val SLOTS = listOf(
 )
 
 val DAY_NAMES = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+/** Fixed slot geometry — every day renders the exact same vertical rhythm. */
+private val SLOT_ROW_H = 56.dp
+private val SLOT_GAP = 6.dp
 
 private val TimetableMuted = Color(0xFF2C3548)
 private val BreakColor = Color(0xFF5B6579)
@@ -239,8 +251,8 @@ fun TimetableScreen(
         }
     }
     val todayIdx = timeInfo.dayOfWeekIdx
-    var selectedDay by remember { mutableStateOf(if (todayIdx == 0) 1 else todayIdx) }
-    var isFacultyOpen by remember { mutableStateOf(false) }
+    var selectedDay by remember { mutableStateOf(todayIdx) }
+    var showFacultyDialog by remember { mutableStateOf(false) }
 
     val profile = liveResponse?.profile
     val semesterLabel = profile?.semester?.trim()?.takeIf { it.isNotEmpty() }
@@ -284,30 +296,222 @@ fun TimetableScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            PeriodsList(selectedDay = selectedDay, weekly = weekly, timeInfo = timeInfo)
+            val dayItems = weekly[selectedDay].orEmpty()
+            if (dayItems.isEmpty()) {
+                NoClassesCard(isSunday = selectedDay == 0)
+            } else {
+                SlotGrid(
+                    dayItems = dayItems,
+                    isToday = selectedDay == todayIdx,
+                    nowMin = timeInfo.minutesOfDay
+                )
+            }
         }
 
         if (facultyList.isNotEmpty()) {
             Spacer(modifier = Modifier.height(18.dp))
-            FacultySection(facultyList = facultyList)
+            FacultyEntryButton(count = facultyList.size) { showFacultyDialog = true }
+        }
+    }
+
+    if (showFacultyDialog) {
+        FacultyDialog(facultyList = facultyList, onDismiss = { showFacultyDialog = false })
+    }
+}
+
+// ===================== Fixed-slot grid =====================
+
+/**
+ * Renders all 7 college slots at fixed heights — merged (multi-period) classes
+ * simply span their slots, free slots render as ghost rows. Total column height
+ * is identical on every day, so switching days never shifts content vertically.
+ */
+@Composable
+private fun SlotGrid(
+    dayItems: List<TTItem>,
+    isToday: Boolean,
+    nowMin: Int
+) {
+    val processed = mutableSetOf<Int>()
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(SLOT_GAP)
+    ) {
+        SLOTS.forEach { slot ->
+            if (slot.n in processed) return@forEach
+
+            val item = dayItems.find { it.slots.first() == slot.n }
+            if (item != null) {
+                processed += item.slots
+                val span = item.slots.size
+                PeriodRowCard(
+                    timeLabel = item.timeLabel,
+                    name = item.name,
+                    color = item.color,
+                    tag = item.tag,
+                    facultyName = item.facultyName,
+                    isCurrent = isToday && nowMin >= item.startMin && nowMin < item.endMin,
+                    height = SLOT_ROW_H * span + SLOT_GAP * (span - 1)
+                )
+            } else {
+                processed += slot.n
+                if (slot.n == 5) {
+                    GhostRowCard(
+                        timeLabel = slot.label,
+                        title = "Lunch Break",
+                        tag = "BREAK",
+                        tagColor = BreakColor
+                    )
+                } else {
+                    GhostRowCard(timeLabel = slot.label, title = "Free")
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun TimetableUnavailableCard() {
+private fun PeriodRowCard(
+    timeLabel: String,
+    name: String,
+    color: Color,
+    tag: String?,
+    facultyName: String?,
+    isCurrent: Boolean,
+    height: Dp
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .height(height)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isCurrent) TrackerColors.SurfaceElevated else TrackerColors.SurfaceDark)
+            .border(
+                width = 1.dp,
+                color = if (isCurrent) TrackerColors.WarningAmber else TrackerColors.HairlineBorder,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(height * 0.5f)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // Fixed time gutter — aligns across every day
+            Row(
+                modifier = Modifier.width(80.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isCurrent) {
+                    PulseDot(color = TrackerColors.WarningAmber)
+                    Spacer(modifier = Modifier.width(5.dp))
+                }
+                Text(
+                    text = timeLabel,
+                    color = if (isCurrent) TrackerColors.TextSecondary else TrackerColors.TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = name,
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.SansSerif,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (facultyName != null) {
+                    Text(
+                        text = facultyName,
+                        color = TrackerColors.TextMuted,
+                        fontSize = 9.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (tag != null) {
+                TagChip(text = tag, color = color)
+            }
+        }
+    }
+}
+
+/** Flat, quiet row for free periods / lunch — clearly "empty" next to class rows. */
+@Composable
+private fun GhostRowCard(
+    timeLabel: String,
+    title: String,
+    tag: String? = null,
+    tagColor: Color? = null
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(SLOT_ROW_H)
+            .clip(RoundedCornerShape(12.dp))
+            .background(TrackerColors.PureBlack)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = timeLabel,
+                color = TrackerColors.TextSubtle,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.width(80.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = title,
+                color = if (tag != null) TrackerColors.TextMuted else TrackerColors.TextSubtle,
+                fontSize = 13.sp,
+                fontWeight = if (tag != null) FontWeight.SemiBold else FontWeight.Normal,
+                fontFamily = if (tag != null) FontFamily.SansSerif else FontFamily.Serif,
+                modifier = Modifier.weight(1f)
+            )
+            if (tag != null && tagColor != null) {
+                TagChip(text = tag, color = tagColor)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoClassesCard(isSunday: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(horizontal = 20.dp, vertical = 32.dp),
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 20.dp, vertical = 40.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "TIMETABLE UNAVAILABLE",
+                text = "NO CLASSES",
                 color = TrackerColors.TextMuted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -316,7 +520,7 @@ private fun TimetableUnavailableCard() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Tap SYNC in the top bar to pull the latest schedule for your section.",
+                text = if (isSunday) "It's Sunday — enjoy the day off." else "Nothing scheduled for this day.",
                 color = TrackerColors.TextSubtle,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.SansSerif,
@@ -327,101 +531,45 @@ private fun TimetableUnavailableCard() {
 }
 
 @Composable
-private fun DaySelectorTabs(
-    selectedDay: Int,
-    todayIdx: Int,
-    onSelect: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        (1..6).forEach { dayIdx ->
-            val isSelected = dayIdx == selectedDay
-            val isToday = dayIdx == todayIdx
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.SurfaceDark)
-                    .border(1.dp, if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                    .clickable { onSelect(dayIdx) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = DAY_NAMES[dayIdx],
-                        color = if (isSelected) TrackerColors.PureBlack else TrackerColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    if (isToday) {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 2.dp)
-                                .size(4.dp)
-                                .clip(CircleShape)
-                                .background(if (isSelected) TrackerColors.PureBlack else TrackerColors.WarningAmber)
-                        )
-                    }
-                }
-            }
-        }
-    }
+private fun PulseDot(color: Color) {
+    val transition = rememberInfiniteTransition()
+    val alpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+    Box(
+        modifier = Modifier
+            .size(6.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = alpha))
+    )
 }
 
 @Composable
-private fun PeriodsList(
-    selectedDay: Int,
-    weekly: Map<Int, List<TTItem>>,
-    timeInfo: TimeInfo
-) {
-    val dayItems = weekly[selectedDay].orEmpty()
-    val nowMin = timeInfo.minutesOfDay
-    val isToday = selectedDay == timeInfo.dayOfWeekIdx
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun TagChip(text: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.2f))
+            .border(1.dp, color, CircleShape)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
-        val processedSlots = mutableSetOf<Int>()
-
-        SLOTS.forEach { slot ->
-            if (slot.n in processedSlots) return@forEach
-
-            val item = dayItems.find { it.slots.first() == slot.n }
-            when {
-                item != null -> {
-                    processedSlots.addAll(item.slots)
-                    PeriodRowCard(
-                        timeLabel = item.timeLabel,
-                        name = item.name,
-                        color = item.color,
-                        tag = item.tag,
-                        facultyName = item.facultyName,
-                        isCurrent = isToday && nowMin >= item.startMin && nowMin < item.endMin
-                    )
-                }
-                slot.n == 5 -> {
-                    processedSlots.add(slot.n)
-                    NonClassRowCard(
-                        timeLabel = slot.label,
-                        title = "Lunch Break",
-                        tag = "BREAK",
-                        tagColor = BreakColor
-                    )
-                }
-                dayItems.none { slot.n in it.slots } -> {
-                    processedSlots.add(slot.n)
-                    NonClassRowCard(timeLabel = slot.label, title = "Free", tag = null, tagColor = null)
-                }
-            }
-        }
+        Text(
+            text = text,
+            color = color,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp
+        )
     }
 }
+
+// ===================== NOW card =====================
 
 @Composable
 private fun RealTimeNowCard(
@@ -484,16 +632,6 @@ private fun RealTimeNowCard(
         }
     }
 
-    val transition = rememberInfiniteTransition()
-    val dotAlpha by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -515,12 +653,7 @@ private fun RealTimeNowCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(statusColor.copy(alpha = dotAlpha))
-                    )
+                    PulseDot(color = statusColor)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = statusLabel,
@@ -567,214 +700,269 @@ private fun RealTimeNowCard(
     }
 }
 
+// ===================== Day selector =====================
+
 @Composable
-private fun PeriodRowCard(
-    timeLabel: String,
-    name: String,
-    color: Color,
-    tag: String?,
-    facultyName: String?,
-    isCurrent: Boolean
+private fun DaySelectorTabs(
+    selectedDay: Int,
+    todayIdx: Int,
+    onSelect: (Int) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isCurrent) TrackerColors.SurfaceElevated else TrackerColors.SurfaceDark)
-            .border(
-                width = 1.dp,
-                color = if (isCurrent) TrackerColors.WarningAmber else TrackerColors.HairlineBorder,
-                shape = RoundedCornerShape(10.dp)
-            )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        (0..6).forEach { dayIdx ->
+            val isSelected = dayIdx == selectedDay
+            val isToday = dayIdx == todayIdx
+
             Box(
                 modifier = Modifier
-                    .width(4.dp)
-                    .height(if (facultyName != null) 40.dp else 26.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Text(
-                text = timeLabel,
-                color = TrackerColors.TextMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.width(84.dp)
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.SansSerif,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (facultyName != null) {
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.SurfaceDark)
+                    .border(1.dp, if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+                    .clickable { onSelect(dayIdx) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = facultyName,
-                        color = TrackerColors.TextMuted,
-                        fontSize = 9.5.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = DAY_NAMES[dayIdx],
+                        color = if (isSelected) TrackerColors.PureBlack else TrackerColors.TextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 3.dp)
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    isToday && isSelected -> TrackerColors.PureBlack
+                                    isToday -> TrackerColors.WarningAmber
+                                    else -> Color.Transparent
+                                }
+                            )
                     )
                 }
             }
-
-            if (tag != null) {
-                TagChip(text = tag, color = color)
-            }
         }
     }
 }
 
+// ===================== Faculty dialog =====================
+
 @Composable
-private fun NonClassRowCard(
-    timeLabel: String,
-    title: String,
-    tag: String?,
-    tagColor: Color?
-) {
+private fun FacultyEntryButton(count: Int, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 11.dp)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 13.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(26.dp)
-                    .clip(CircleShape)
-                    .background(tagColor ?: TimetableMuted)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "FACULTY & COURSES",
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.2.sp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(TrackerColors.SurfaceElevated)
+                        .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "$count",
+                        color = TrackerColors.TextSecondary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
             Text(
-                text = timeLabel,
+                text = "VIEW  ›",
                 color = TrackerColors.TextMuted,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
-                modifier = Modifier.width(84.dp)
+                letterSpacing = 1.sp
             )
-            Text(
-                text = title,
-                color = if (tag != null) TrackerColors.TextMuted else TrackerColors.TextSubtle,
-                fontSize = 13.sp,
-                fontWeight = if (tag != null) FontWeight.SemiBold else FontWeight.Normal,
-                fontFamily = if (tag != null) FontFamily.SansSerif else FontFamily.Serif,
-                modifier = Modifier.weight(1f)
-            )
-            if (tag != null && tagColor != null) {
-                TagChip(text = tag, color = tagColor)
+        }
+    }
+}
+
+@Composable
+private fun FacultyDialog(
+    facultyList: List<FacultyAllocation>,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = TrackerColors.SurfaceDark,
+            border = BorderStroke(1.dp, TrackerColors.HairlineBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "FACULTY & COURSES",
+                            color = TrackerColors.TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.2.sp
+                        )
+                        Text(
+                            text = "${facultyList.size} allocations for your section",
+                            color = TrackerColors.TextSubtle,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(TrackerColors.SurfaceElevated)
+                            .border(1.dp, TrackerColors.HairlineBorder, CircleShape)
+                            .clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✕",
+                            color = TrackerColors.TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(facultyList) { fac ->
+                        FacultyDialogRow(faculty = fac)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TagChip(text: String, color: Color) {
-    Box(
+private fun FacultyDialogRow(faculty: FacultyAllocation) {
+    Row(
         modifier = Modifier
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.2f))
-            .border(1.dp, color, CircleShape)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(TrackerColors.SurfaceElevated)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(resolveColor(faculty.subject))
+        )
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = faculty.code.ifBlank { faculty.subject },
+                color = TrackerColors.TextMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+            Text(
+                text = faculty.subject,
+                color = TrackerColors.TextPrimary,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
         Text(
-            text = text,
-            color = color,
-            fontSize = 9.sp,
+            text = faculty.faculty,
+            color = TrackerColors.TextSecondary,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.sp
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 120.dp)
         )
     }
 }
 
-@Composable
-private fun FacultySection(facultyList: List<FacultyAllocation>) {
-    var isOpen by remember { mutableStateOf(false) }
+// ===================== Empty state =====================
 
-    Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
-                .clickable { isOpen = !isOpen }
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
-        ) {
+@Composable
+private fun TimetableUnavailableCard() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+            .padding(horizontal = 20.dp, vertical = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = if (isOpen) "FACULTY & COURSES ▴" else "FACULTY & COURSES ▾",
-                color = TrackerColors.TextPrimary,
+                text = "TIMETABLE UNAVAILABLE",
+                color = TrackerColors.TextMuted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp
+                letterSpacing = 1.sp
             )
-        }
-
-        if (isOpen) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                facultyList.forEach { fac ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TrackerColors.SurfaceDark)
-                            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-                            Text(
-                                text = fac.code.ifBlank { fac.subject },
-                                color = TrackerColors.TextMuted,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Text(
-                                text = fac.subject,
-                                color = TrackerColors.TextPrimary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = FontFamily.SansSerif,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(
-                            text = fac.faculty,
-                            color = TrackerColors.PrimaryWhite,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Tap SYNC in the top bar to pull the latest schedule for your section.",
+                color = TrackerColors.TextSubtle,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.SansSerif,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
