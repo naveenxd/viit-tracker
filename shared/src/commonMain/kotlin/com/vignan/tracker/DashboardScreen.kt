@@ -62,7 +62,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 
 enum class MainNavTab(val label: String) {
     COURSES("COURSES"),
@@ -583,22 +582,26 @@ private fun HeroTerminalCard(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    val pctTenths = (overallPercentage * 10).roundToInt()
+                    val pctText = formatPercentage(overallPercentage)
+                    val intPart = pctText.substringBefore('.')
+                    val fracPart = if ('.' in pctText) "." + pctText.substringAfter('.') else null
                     Text(
-                        text = "${pctTenths / 10}",
+                        text = intPart,
                         color = TrackerColors.TextPrimary,
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
-                    Text(
-                        text = ".${pctTenths % 10}%",
-                        color = statusColor,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
+                    if (fracPart != null) {
+                        Text(
+                            text = fracPart,
+                            color = statusColor,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
@@ -831,7 +834,7 @@ private fun MinimalSubjectRow(subject: UiSubjectAttendance) {
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "${subject.percentage.roundToInt()}%",
+                        text = formatPercentage(subject.percentage),
                         color = percentageColor,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Black,

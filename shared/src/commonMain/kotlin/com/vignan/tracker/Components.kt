@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 enum class SubjectFilter {
     ALL, AT_RISK, SAFE
@@ -51,6 +52,21 @@ fun calculateMargin(attended: Int, conducted: Int): AttendanceInsight {
     } else {
         val mustAttend = ceil(3.0 * conducted - 4.0 * attended).toInt()
         AttendanceInsight.AtRisk(maxOf(1, mustAttend))
+    }
+}
+
+/**
+ * Formats a percentage exactly as received — up to 2 decimals, trailing zeros trimmed.
+ * e.g. 87.95 → "87.95%", 87.9 → "87.9%", 88.0 → "88%". Never rounds the visible value.
+ */
+fun formatPercentage(percentage: Double): String {
+    val hundredths = (percentage * 100).roundToInt()
+    val intPart = hundredths / 100
+    val fracPart = hundredths % 100
+    return when {
+        fracPart == 0 -> "$intPart%"
+        fracPart % 10 == 0 -> "$intPart.${fracPart / 10}%"
+        else -> "$intPart.$fracPart%"
     }
 }
 
