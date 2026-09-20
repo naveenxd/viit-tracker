@@ -80,7 +80,8 @@ val SLOTS = listOf(
     SlotInfo(7, "3.10–4.00", 15 * 60 + 10, 16 * 60)
 )
 
-val DAY_NAMES = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+/** Two-letter compact labels for the tighter day selector pills. */
+private val DAY_LABELS = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
 
 /** Fixed slot geometry — every day renders the exact same vertical rhythm. */
 private val SLOT_ROW_H = 56.dp
@@ -708,41 +709,69 @@ private fun DaySelectorTabs(
     todayIdx: Int,
     onSelect: (Int) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        (0..6).forEach { dayIdx ->
-            val isSelected = dayIdx == selectedDay
-            val isToday = dayIdx == todayIdx
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            (0..6).forEach { dayIdx ->
+                val isSelected = dayIdx == selectedDay
+                val isToday = dayIdx == todayIdx
 
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.SurfaceDark)
-                    .border(1.dp, if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                    .clickable { onSelect(dayIdx) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            when {
+                                isSelected -> TrackerColors.PrimaryWhite
+                                isToday -> TrackerColors.SurfaceElevated
+                                else -> TrackerColors.SurfaceDark
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            when {
+                                isSelected -> TrackerColors.PrimaryWhite
+                                isToday -> TrackerColors.HairlineBorderLight
+                                else -> TrackerColors.HairlineBorder
+                            },
+                            RoundedCornerShape(10.dp)
+                        )
+                        .clickable { onSelect(dayIdx) },
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        text = DAY_NAMES[dayIdx],
+                        text = DAY_LABELS[dayIdx],
                         color = if (isSelected) TrackerColors.PureBlack else TrackerColors.TextMuted,
                         fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Medium,
                         fontFamily = FontFamily.Monospace
                     )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            (0..6).forEach { dayIdx ->
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
                         modifier = Modifier
-                            .padding(top = 3.dp)
                             .size(4.dp)
                             .clip(CircleShape)
                             .background(
                                 when {
-                                    isToday && isSelected -> TrackerColors.PureBlack
-                                    isToday -> TrackerColors.WarningAmber
+                                    dayIdx == todayIdx -> TrackerColors.WarningAmber
+                                    dayIdx == selectedDay -> TrackerColors.TextSubtle
                                     else -> Color.Transparent
                                 }
                             )
