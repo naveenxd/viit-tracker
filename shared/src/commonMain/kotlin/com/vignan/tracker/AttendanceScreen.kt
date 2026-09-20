@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -263,9 +264,8 @@ fun AttendanceScreen() {
                 .background(TrackerColors.PureBlack)
         ) {
             val screenState = when {
-                isInitializing -> MainScreenState.LOADING
+                isInitializing -> MainScreenState.INITIALIZING
                 !isSessionActive -> MainScreenState.LOGIN
-                attendanceData == null -> MainScreenState.LOADING
                 else -> MainScreenState.DASHBOARD
             }
 
@@ -275,8 +275,18 @@ fun AttendanceScreen() {
                 label = "mainScreenTransition"
             ) { state ->
                 when (state) {
-                    MainScreenState.LOADING -> {
-                        DashboardSkeleton()
+                    MainScreenState.INITIALIZING -> {
+                        // Brief check for a stored session — just a tiny spinner.
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = TrackerColors.TextMuted,
+                                strokeWidth = 2.dp
+                            )
+                        }
                     }
                     MainScreenState.LOGIN -> {
                         LoginScreen(
@@ -293,20 +303,16 @@ fun AttendanceScreen() {
                         )
                     }
                     MainScreenState.DASHBOARD -> {
-                        val data = attendanceData
-                        if (data != null) {
-                            DashboardScreen(
-                                data = data,
-                                liveResponse = liveAttendanceResponse,
-                                searchQuery = searchQuery,
-                                onSearchQueryChange = { searchQuery = it },
-                                selectedFilter = selectedFilter,
-                                onFilterSelect = { selectedFilter = it }
-                            )
-                        } else {
-                            // Exits can race the crossfade — fall back gracefully instead of crashing.
-                            DashboardSkeleton()
-                        }
+                        // Real UI renders immediately; data fills in when the response lands.
+                        DashboardScreen(
+                            data = attendanceData,
+                            liveResponse = liveAttendanceResponse,
+                            isLoading = isLoading,
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            selectedFilter = selectedFilter,
+                            onFilterSelect = { selectedFilter = it }
+                        )
                     }
                 }
             }
@@ -315,7 +321,7 @@ fun AttendanceScreen() {
 }
 
 private enum class MainScreenState {
-    LOADING,
+    INITIALIZING,
     LOGIN,
     DASHBOARD
 }
