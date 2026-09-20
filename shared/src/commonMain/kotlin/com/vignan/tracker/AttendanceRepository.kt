@@ -76,5 +76,13 @@ class AttendanceRepository(
         }
     }
 
+    suspend fun simulateBunk(request: SimulateBunkRequest): Result<SimulateBunkResponse> {
+        return try {
+            Result.success(api.simulateBunk(request))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun logout() = store.clear()
 }
