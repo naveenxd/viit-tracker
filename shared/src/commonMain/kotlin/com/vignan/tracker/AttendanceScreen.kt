@@ -20,6 +20,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,7 +37,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AttendanceScreen() {
+    val repository = remember { AttendanceRepository() }
     val scope = rememberCoroutineScope()
+
     var rollNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
@@ -50,6 +53,33 @@ fun AttendanceScreen() {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(SubjectFilter.ALL) }
 
+    // Auto-login on launch if stored credentials exist
+    LaunchedEffect(Unit) {
+        val stored = repository.getStoredCredentials()
+        if (stored != null) {
+            rollNumber = stored.rollNo
+            password = stored.password
+            isLoading = true
+            scope.launch {
+                val result = repository.fetchLiveAttendance()
+                result.fold(
+                    onSuccess = { liveResponse ->
+                        attendanceData = liveResponse.toAttendanceResponse()
+                    },
+                    onFailure = { error ->
+                        val friendlyMsg = mapApiErrorToUserMessage(error)
+                        errorMessage = friendlyMsg
+                        snackbarHostState.showSnackbar(
+                            message = friendlyMsg,
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                )
+                isLoading = false
+            }
+        }
+    }
+
     fun fetchAttendance() {
         if (rollNumber.isBlank() || password.isBlank()) {
             showValidationDialog = true
@@ -58,18 +88,21 @@ fun AttendanceScreen() {
         isLoading = true
         errorMessage = null
         scope.launch {
-            try {
-                attendanceData = AttendanceClient.fetchAttendance(rollNumber, password)
-            } catch (e: Exception) {
-                val errorMsg = e.message?.ifBlank { null } ?: "Failed to connect to attendance server"
-                errorMessage = errorMsg
-                snackbarHostState.showSnackbar(
-                    message = errorMsg,
-                    duration = SnackbarDuration.Short
-                )
-            } finally {
-                isLoading = false
-            }
+            val result = repository.fetchLiveAttendance(rollNumber, password)
+            result.fold(
+                onSuccess = { liveResponse ->
+                    attendanceData = liveResponse.toAttendanceResponse()
+                },
+                onFailure = { error ->
+                    val friendlyMsg = mapApiErrorToUserMessage(error)
+                    errorMessage = friendlyMsg
+                    snackbarHostState.showSnackbar(
+                        message = friendlyMsg,
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            )
+            isLoading = false
         }
     }
 
@@ -164,6 +197,7 @@ fun AttendanceScreen() {
                 isLoading = isLoading,
                 onRefresh = { fetchAttendance() },
                 onLogout = {
+                    scope.launch { repository.logout() }
                     attendanceData = null
                     password = ""
                     errorMessage = null
@@ -198,5 +232,20 @@ fun AttendanceScreen() {
                 )
             }
         }
+    }
+}
+
+private fun mapApiErrorToUserMessage(error: Throwable): String {
+    val cause = (error as? ApiError.Network)?.cause
+    println("ATTENDANCE_ERROR_DEBUG: ${error::class.simpleName}: ${error.message}, cause: ${cause?.message}")
+    cause?.printStackTrace()
+    return when (error) {
+        is ApiError.InvalidCredentials -> if (error.message.isNotBlank()) error.message else "Wrong roll number or password."
+        is ApiError.RateLimited -> "Too many attempts. Try again in ${error.retryAfterSec}s."
+        is ApiError.Network -> "Connection error: ${cause?.message ?: cause?.toString() ?: "Unable to reach server"}"
+        is ApiError.Upstream -> error.message.ifBlank { "Attendance service is unavailable." }
+        is ApiError.BadRequest -> error.message.ifBlank { "Invalid request." }
+        is ApiError.Unknown -> "Error ${error.code}: ${error.body}"
+        else -> error.message?.ifBlank { null } ?: "Attendance service is unavailable."
     }
 }

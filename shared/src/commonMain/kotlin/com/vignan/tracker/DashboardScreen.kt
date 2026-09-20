@@ -521,7 +521,7 @@ private fun SegmentChip(
 }
 
 @Composable
-private fun MinimalSubjectRow(subject: SubjectAttendance) {
+private fun MinimalSubjectRow(subject: UiSubjectAttendance) {
     val insight = calculateMargin(subject.attended, subject.conducted)
     val percentageColor = when {
         subject.percentage >= 80.0 -> TrackerColors.SafeEmerald
