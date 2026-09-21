@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,11 +50,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 enum class MainNavTab(val label: String) {
     HOME("HOME"),
@@ -102,28 +104,22 @@ fun DashboardScreen(
                     }
 
                     item {
-                        // Skips stat tile (~1/3) beside today's badge panel (~2/3)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            TodayPanel(
-                                liveResponse = liveResponse,
-                                hasData = hasData,
-                                modifier = Modifier
-                                    .weight(0.6f)
-                                    .fillMaxHeight()
-                            )
-                            SkipsPanel(
-                                liveResponse = liveResponse,
-                                hasData = hasData,
-                                modifier = Modifier
-                                    .weight(0.4f)
-                                    .fillMaxHeight()
-                            )
-                        }
+                        // Badge panel defines the height (measured unbounded, so
+                        // no chip row can ever clip); skips tile matches it.
+                        StatRow(
+                            leftContent = {
+                                TodayPanel(
+                                    liveResponse = liveResponse,
+                                    hasData = hasData
+                                )
+                            },
+                            rightContent = {
+                                SkipsPanel(
+                                    liveResponse = liveResponse,
+                                    hasData = hasData
+                                )
+                            }
+                        )
                     }
 
                     item { FetchAttendanceButton(isLoading = isRefreshing, onClick = onFetchClick) }
@@ -297,6 +293,48 @@ private fun HeroTerminalCard(
     }
 }
 
+/**
+ * Two side-by-side panels (60:40 + gap) whose heights always match.
+ * The LEFT panel is measured with unbounded height so content (a FlowRow of
+ * chips) fully determines the row height — FlowRow's intrinsic measurement
+ * under-reports and clips rows when used with IntrinsicSize.Min.
+ */
+@Composable
+private fun StatRow(
+    modifier: Modifier = Modifier,
+    leftContent: @Composable () -> Unit,
+    rightContent: @Composable () -> Unit
+) {
+    Layout(
+        content = {
+            Box(modifier = Modifier) { leftContent() }
+            Box(modifier = Modifier) { rightContent() }
+        }
+    ) { measurables, constraints ->
+        val gapPx = 10.dp.roundToPx()
+        val usable = constraints.maxWidth - gapPx
+        val leftW = (usable * 0.6f).roundToInt()
+        val rightW = usable - leftW
+
+        val leftPlaceable = measurables[0].measure(
+            Constraints(minWidth = leftW, maxWidth = leftW)
+        )
+        val rightPlaceable = measurables[1].measure(
+            Constraints(
+                minWidth = rightW,
+                maxWidth = rightW,
+                minHeight = leftPlaceable.height,
+                maxHeight = leftPlaceable.height
+            )
+        )
+
+        layout(constraints.maxWidth, leftPlaceable.height) {
+            leftPlaceable.placeRelative(0, 0)
+            rightPlaceable.placeRelative(leftW + gapPx, 0)
+        }
+    }
+}
+
 /** Compact stat tile: skippable periods (or classes to recover), accent-edged. */
 @Composable
 private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, modifier: Modifier = Modifier) {
@@ -310,9 +348,10 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
             .clip(RoundedCornerShape(14.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp)
+            .padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Row {
+        Row(modifier = Modifier.fillMaxHeight()) {
             // Accent edge, same language as the timetable subject bars
             Box(
                 modifier = Modifier
