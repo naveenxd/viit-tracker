@@ -16,11 +16,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -85,58 +83,28 @@ fun DashboardScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 86.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 86.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when (selectedNavTab) {
                 MainNavTab.HOME -> {
                     item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            SkippablePeriodsCard(
-                                liveResponse = liveResponse,
-                                hasData = hasData,
-                                modifier = Modifier.weight(1f).fillMaxHeight()
-                            )
-                            AttendanceRingCard(
-                                percentage = overallPercentage,
-                                hasData = hasData,
-                                modifier = Modifier.weight(1f).fillMaxHeight()
-                            )
-                        }
-                    }
-
-                    item { GreetingCard(rollNumber = data?.rollNumber.orEmpty()) }
-
-                    item {
-                        PeriodsLedgerCard(
+                        HeroTerminalCard(
+                            studentName = data?.studentName.orEmpty(),
+                            rollNumber = data?.rollNumber.orEmpty(),
+                            branch = liveResponse?.profile?.branch.orEmpty(),
+                            semester = liveResponse?.profile?.semester ?: "",
+                            overallPercentage = overallPercentage,
                             totalAttended = totalAttended,
                             totalConducted = totalConducted,
+                            liveResponse = liveResponse,
                             hasData = hasData
                         )
                     }
 
                     item { TodayAttendanceCard(liveResponse = liveResponse, hasData = hasData) }
 
-                    item {
-                        FetchServerButton(
-                            serverLabel = "Fastest Server",
-                            isLoading = isRefreshing,
-                            onClick = onFetchClick
-                        )
-                    }
-
-                    item {
-                        FetchServerButton(
-                            serverLabel = "Flexible Server",
-                            isLoading = isRefreshing,
-                            onClick = onFetchClick
-                        )
-                    }
+                    item { FetchAttendanceButton(isLoading = isRefreshing, onClick = onFetchClick) }
 
                     item {
                         LastUpdatedFooter(
@@ -156,7 +124,7 @@ fun DashboardScreen(
 
             // Bottom Footer Badge
             item {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 FooterBadge()
             }
         }
@@ -170,271 +138,235 @@ fun DashboardScreen(
     }
 }
 
-// ---------------------------------------------------------------- home cards
+// ---------------------------------------------------------------- hero
 
 @Composable
-private fun SkippablePeriodsCard(
+private fun HeroTerminalCard(
+    studentName: String,
+    rollNumber: String,
+    branch: String,
+    semester: String,
+    overallPercentage: Double,
+    totalAttended: Int,
+    totalConducted: Int,
     liveResponse: LiveAttendanceResponse?,
-    hasData: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val skips = liveResponse?.intelligence?.safeSkips
-    val isSafe = skips?.status?.equals("Safe", ignoreCase = true) ?: true
-    val accent = if (isSafe) TrackerColors.SafeEmerald else TrackerColors.DangerRose
-    val bigNumber = when {
-        !hasData || skips == null -> null
-        isSafe -> skips.periods
-        else -> skips.classesNeededToRecover
-    }
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(accent.copy(alpha = 0.10f))
-            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-            .padding(14.dp)
-    ) {
-        Column {
-            Text(
-                text = if (isSafe) "Periods can skip" else "Classes needed",
-                color = TrackerColors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = bigNumber?.toString() ?: "—",
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 44.sp,
-                    fontWeight = FontWeight.Black,
-                    fontFamily = FontFamily.Monospace
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "⚡",
-                    color = accent,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isSafe) {
-                    MiniStatTile(
-                        value = skips?.days?.toString() ?: "—",
-                        label = "days",
-                        accent = accent
-                    )
-                    MiniStatTile(
-                        value = skips?.periods?.toString() ?: "—",
-                        label = "periods",
-                        accent = accent
-                    )
-                } else {
-                    MiniStatTile(
-                        value = skips?.classesNeededToRecover?.toString() ?: "—",
-                        label = "attend",
-                        accent = accent
-                    )
-                    MiniStatTile(
-                        value = "${skips?.projectedPercentage?.toInt() ?: 0}%",
-                        label = "projected",
-                        accent = accent
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniStatTile(value: String, label: String, accent: Color) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(TrackerColors.PureBlack.copy(alpha = 0.45f))
-            .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = value,
-            color = accent,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.Monospace
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = label,
-            color = TrackerColors.TextSecondary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.SansSerif
-        )
-    }
-}
-
-@Composable
-private fun AttendanceRingCard(
-    percentage: Double,
-    hasData: Boolean,
-    modifier: Modifier = Modifier
+    hasData: Boolean
 ) {
     val statusColor = when {
         !hasData -> TrackerColors.TextMuted
-        percentage >= 80.0 -> TrackerColors.SafeEmerald
-        percentage >= 75.0 -> TrackerColors.WarningAmber
+        overallPercentage >= 80.0 -> TrackerColors.SafeEmerald
+        overallPercentage >= 75.0 -> TrackerColors.WarningAmber
         else -> TrackerColors.DangerRose
     }
 
+    val safeSkips = liveResponse?.intelligence?.safeSkips
+
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(16.dp))
-            .padding(14.dp)
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "Present attendance",
-                color = TrackerColors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                maxLines = 1
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Canvas(modifier = Modifier.size(118.dp)) {
-                    val strokeW = 11.dp.toPx()
-                    val inset = strokeW / 2 + 1.dp.toPx()
-                    val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
-                    val arcTopLeft = Offset(inset, inset)
-
-                    // Track
-                    drawArc(
-                        color = TrackerColors.TextSubtle.copy(alpha = 0.35f),
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        topLeft = arcTopLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokeW, cap = StrokeCap.Round)
-                    )
-                    // Progress
-                    if (hasData) {
-                        drawArc(
-                            color = statusColor,
-                            startAngle = -90f,
-                            sweepAngle = 360f * (percentage / 100.0).toFloat().coerceIn(0f, 1f),
-                            useCenter = false,
-                            topLeft = arcTopLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokeW, cap = StrokeCap.Round)
-                        )
-                    }
-                }
-                Text(
-                    text = if (hasData) formatPercentage(percentage) else "—",
-                    color = if (hasData) TrackerColors.TextPrimary else TrackerColors.TextMuted,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GreetingCard(rollNumber: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "Hi, ",
-            color = TrackerColors.TextSecondary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.SansSerif
-        )
-        Text(
-            text = rollNumber.ifBlank { "—" },
-            color = TrackerColors.TextPrimary,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-    }
-}
-
-@Composable
-private fun PeriodsLedgerCard(totalAttended: Int, totalConducted: Int, hasData: Boolean) {
-    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(16.dp)
     ) {
-        LedgerTile(label = "Number of periods attended", value = if (hasData) "$totalAttended" else "—")
-        LedgerTile(label = "Number of periods held", value = if (hasData) "$totalConducted" else "—")
+        Column {
+            // Identity: name + status pill
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = studentName.ifBlank { "STUDENT" }.uppercase(),
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.SansSerif,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                StatusPill(
+                    hasData = hasData,
+                    overallPercentage = overallPercentage,
+                    statusColor = statusColor
+                )
+            }
+
+            // Roll • branch • semester
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = listOfNotNull(
+                    rollNumber.takeIf { it.isNotBlank() },
+                    branch.takeIf { it.isNotBlank() },
+                    semester.takeIf { it.isNotBlank() }
+                ).joinToString("  •  ").ifBlank { "—" },
+                color = TrackerColors.TextMuted,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Percentage + attended/conducted
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    if (hasData) {
+                        val pctText = formatPercentage(overallPercentage)
+                        val intPart = pctText.substringBefore('.')
+                        val fracPart = if ('.' in pctText) "." + pctText.substringAfter('.') else null
+                        Text(
+                            text = intPart,
+                            color = TrackerColors.TextPrimary,
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        if (fracPart != null) {
+                            Text(
+                                text = fracPart,
+                                color = statusColor,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "—",
+                            color = TrackerColors.TextMuted,
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = if (hasData) "$totalAttended / $totalConducted" else "— / —",
+                        color = if (hasData) TrackerColors.TextPrimary else TrackerColors.TextMuted,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "ATTENDED CLASSES",
+                        color = TrackerColors.TextMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.2.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Progress track
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .clip(CircleShape)
+                    .background(TrackerColors.HairlineBorder)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth((overallPercentage / 100.0).toFloat().coerceIn(0f, 1f))
+                        .height(2.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Safe skips callout
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(TrackerColors.PureBlack)
+                    .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Text(
+                    text = when {
+                        !hasData -> "Waiting for the latest attendance snapshot from the portal."
+                        safeSkips != null && safeSkips.status.equals("Safe", ignoreCase = true) ->
+                            "Safe Skips: ${safeSkips.days} days (${safeSkips.periods} periods) buffer remaining."
+                        safeSkips != null ->
+                            "Attend next ${safeSkips.classesNeededToRecover} classes to get back above 75%."
+                        else -> "Target: 75% attendance threshold"
+                    },
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Serif
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun LedgerTile(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+private fun StatusPill(hasData: Boolean, overallPercentage: Double, statusColor: Color) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(statusColor.copy(alpha = 0.12f))
+            .border(1.dp, statusColor.copy(alpha = 0.4f), CircleShape)
+            .padding(horizontal = 9.dp, vertical = 4.dp)
     ) {
-        Text(
-            text = label,
-            color = TrackerColors.TextSecondary,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.SansSerif,
-            modifier = Modifier.weight(1f)
-        )
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(TrackerColors.PureBlack)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = value,
-                color = TrackerColors.TextPrimary,
-                fontSize = 14.sp,
+                text = when {
+                    !hasData -> "SYNCING"
+                    overallPercentage >= 75.0 -> "SAFE ZONE"
+                    else -> "CRITICAL"
+                },
+                color = statusColor,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.2.sp
             )
         }
     }
 }
 
+// ---------------------------------------------------------------- today
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: Boolean) {
-    val today = liveResponse?.attendance?.today?.maxByOrNull { it.date }
+    val entries = liveResponse?.attendance?.today.orEmpty()
+
+    // Pick today's entry by parsing its date; fall back to the most recent one.
+    val nowMs = System.currentTimeMillis()
+    val todaysEntry = entries.firstOrNull { isSameCalendarDay(parseLooseDate(it.date), nowMs) }
+    val latestEntry = entries
+        .mapNotNull { e -> parseLooseDate(e.date)?.let { e to it } }
+        .maxByOrNull { it.second }?.first
+        ?: entries.lastOrNull()
+    val entry = todaysEntry ?: latestEntry
+    val isToday = todaysEntry != null
 
     Box(
         modifier = Modifier
@@ -455,6 +387,23 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
                 textAlign = TextAlign.Center
             )
 
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = when {
+                    entry == null -> ""
+                    isToday -> "TODAY"
+                    else -> "LAST RECORDED · ${compactDate(entry.date)}"
+                },
+                color = if (isToday) TrackerColors.SafeEmerald else TrackerColors.TextSubtle,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+
             Spacer(modifier = Modifier.height(10.dp))
 
             when {
@@ -466,7 +415,7 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
-                today == null || today.badges.isEmpty() -> Text(
+                entry == null || entry.badges.isEmpty() -> Text(
                     text = "No attendance recorded for today.",
                     color = TrackerColors.TextSubtle,
                     fontSize = 11.sp,
@@ -479,9 +428,10 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    today.badges.forEach { badge ->
+                    entry.badges.forEach { badge ->
                         TodayBadgeChip(
-                            label = "${badge.subject.substringBefore(" ").trim().uppercase()}: ${badge.status}"
+                            subject = badge.subject,
+                            status = badge.status
                         )
                     }
                 }
@@ -491,27 +441,50 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
 }
 
 @Composable
-private fun TodayBadgeChip(label: String) {
+private fun TodayBadgeChip(subject: String, status: String) {
+    val normalized = status.trim().uppercase()
+    val accent = when {
+        normalized == "P" -> TrackerColors.SafeEmerald
+        normalized == "PP" || normalized == "L" -> TrackerColors.WarningAmber
+        else -> TrackerColors.DangerRose
+    }
+
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(TrackerColors.SafeEmerald.copy(alpha = 0.14f))
-            .border(1.dp, TrackerColors.SafeEmerald.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+            .background(accent.copy(alpha = 0.14f))
+            .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 5.dp)
     ) {
-        Text(
-            text = label,
-            color = TrackerColors.SafeEmerald,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            maxLines = 1
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = shortSubjectName(subject),
+                color = accent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = ": $normalized",
+                color = accent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace
+            )
+        }
     }
 }
 
+/** "DL & CO - Something long" → "DL & CO"; trims decoration but keeps the full short code. */
+private fun shortSubjectName(raw: String): String =
+    raw.split(" - ").first().trim().uppercase().ifBlank { "SUBJECT" }
+
+// ---------------------------------------------------------------- fetch + footer
+
 @Composable
-private fun FetchServerButton(serverLabel: String, isLoading: Boolean, onClick: () -> Unit) {
+private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -549,7 +522,7 @@ private fun FetchServerButton(serverLabel: String, isLoading: Boolean, onClick: 
                     fontFamily = FontFamily.SansSerif
                 )
                 Text(
-                    text = serverLabel,
+                    text = "Pull the latest snapshot from the portal",
                     color = TrackerColors.TextMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.SansSerif
@@ -570,32 +543,28 @@ private fun LastUpdatedFooter(scrapedAt: String?, fetchDurationMs: Long?, hasDat
             fontFamily = FontFamily.SansSerif
         )
         Spacer(modifier = Modifier.height(3.dp))
-        if (fetchDurationMs != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Response time: ",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.SansSerif
-                )
-                Text(
-                    text = "${formatResponseTime(fetchDurationMs)} ⚡",
-                    color = TrackerColors.SafeEmerald,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        } else if (hasData) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            when {
+                fetchDurationMs != null -> {
+                    Text(
+                        text = "Response time: ",
+                        color = TrackerColors.TextMuted,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                    Text(
+                        text = "${formatResponseTime(fetchDurationMs)} ⚡",
+                        color = TrackerColors.SafeEmerald,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                hasData -> Text(
                     text = "Cached snapshot shown",
                     color = TrackerColors.TextSubtle,
                     fontSize = 10.sp,
@@ -622,6 +591,45 @@ private fun formatResponseTime(ms: Long): String {
     val seconds = ms / 1000
     val millis = (ms % 1000).toInt()
     return "$seconds.${millis.toString().padStart(3, '0')} sec"
+}
+
+// ---------------------------------------------------------------- date helpers
+
+/** Best-effort parse of the various date formats the server may send. Returns epoch ms or null. */
+private fun parseLooseDate(raw: String?): Long? {
+    if (raw.isNullOrBlank()) return null
+    val cleaned = raw.trim().uppercase()
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd",
+        "dd/MM/yyyy, hh:mm:ss a",
+        "dd/MM/yyyy, hh:mm a",
+        "dd/MM/yyyy"
+    )
+    for (pattern in patterns) {
+        val parsed = runCatching {
+            val format = java.text.SimpleDateFormat(pattern, java.util.Locale.US)
+            format.isLenient = false
+            format.parse(cleaned)
+        }.getOrNull()
+        if (parsed != null) return parsed.time
+    }
+    return null
+}
+
+private fun isSameCalendarDay(aMs: Long?, bMs: Long): Boolean {
+    if (aMs == null) return false
+    val a = java.util.Calendar.getInstance().apply { timeInMillis = aMs }
+    val b = java.util.Calendar.getInstance().apply { timeInMillis = bMs }
+    return a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR) &&
+            a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+/** Compacts a raw date string to dd/MM/yyyy when recognizable; otherwise returns it trimmed. */
+private fun compactDate(raw: String): String {
+    val ms = parseLooseDate(raw) ?: return raw.trim()
+    return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(java.util.Date(ms))
 }
 
 // ---------------------------------------------------------------- nav bar
