@@ -107,16 +107,18 @@ fun DashboardScreen(
                         // Badge panel defines the height (measured unbounded, so
                         // no chip row can ever clip); skips tile matches it.
                         StatRow(
-                            leftContent = {
+                            todayContent = {
                                 TodayPanel(
                                     liveResponse = liveResponse,
-                                    hasData = hasData
+                                    hasData = hasData,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             },
-                            rightContent = {
+                            skipsContent = {
                                 SkipsPanel(
                                     liveResponse = liveResponse,
-                                    hasData = hasData
+                                    hasData = hasData,
+                                    modifier = Modifier.fillMaxHeight()
                                 )
                             }
                         )
@@ -302,13 +304,15 @@ private fun HeroTerminalCard(
 @Composable
 private fun StatRow(
     modifier: Modifier = Modifier,
-    leftContent: @Composable () -> Unit,
-    rightContent: @Composable () -> Unit
+    todayContent: @Composable () -> Unit,
+    skipsContent: @Composable () -> Unit
 ) {
     Layout(
         content = {
-            Box(modifier = Modifier) { leftContent() }
-            Box(modifier = Modifier) { rightContent() }
+            // NOTE: no wrapper Boxes — Box strips min constraints from its
+            // children by default, which is exactly what broke height matching.
+            todayContent()
+            skipsContent()
         }
     ) { measurables, constraints ->
         val gapPx = 10.dp.roundToPx()
@@ -418,7 +422,8 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
                     color = TrackerColors.TextMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.SansSerif,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -512,8 +517,8 @@ private fun TodayPanel(
                 )
                 else -> FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     entry.badges.forEach { badge ->
                         TodayBadgeChip(
@@ -529,7 +534,7 @@ private fun TodayPanel(
 
 @Composable
 private fun TodayBadgeChip(subject: String, status: String) {
-    val normalized = status.trim().uppercase()
+    val normalized = status.trim().uppercase().replace(" ", "")
     // Portal tokens are P/A runs: "P", "PP", "PPP"… all present; "A", "AA"… all
     // absent. Any A in the cell means the subject was skipped at least once.
     val wasAbsent = normalized.any { it == 'A' }
@@ -540,7 +545,7 @@ private fun TodayBadgeChip(subject: String, status: String) {
             .clip(RoundedCornerShape(6.dp))
             .background(accent.copy(alpha = 0.14f))
             .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .padding(horizontal = 7.dp, vertical = 4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
