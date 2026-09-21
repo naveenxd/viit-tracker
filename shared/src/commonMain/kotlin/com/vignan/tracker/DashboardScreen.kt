@@ -599,6 +599,19 @@ private fun formatResponseTime(ms: Long): String {
 private fun parseLooseDate(raw: String?): Long? {
     if (raw.isNullOrBlank()) return null
     val cleaned = raw.trim().uppercase()
+
+    // Register dates are bare "DD/MM" (no year) — resolve against the current year.
+    if (cleaned.length == 5 && cleaned[2] == '/') {
+        val dd = cleaned.substring(0, 2).toIntOrNull()
+        val mm = cleaned.substring(3, 5).toIntOrNull()
+        if (dd != null && mm != null && dd in 1..31 && mm in 1..12) {
+            val cal = java.util.Calendar.getInstance()
+            cal.clear()
+            cal.set(cal.get(java.util.Calendar.YEAR), mm - 1, dd)
+            return cal.timeInMillis
+        }
+    }
+
     val patterns = listOf(
         "yyyy-MM-dd'T'HH:mm:ss",
         "yyyy-MM-dd HH:mm:ss",
