@@ -122,12 +122,6 @@ fun DashboardScreen(
                     }
                 }
             }
-
-            // Bottom Footer Badge
-            item {
-                Spacer(modifier = Modifier.height(2.dp))
-                FooterBadge()
-            }
         }
 
         // Floating pill navigation bar
@@ -290,60 +284,33 @@ private fun HeroTerminalCard(
     }
 }
 
-/** Standalone skips / recovery card driven by the backend's intelligence block. */
+/** Minimal one-line skips / recovery status from the backend's intelligence block. */
 @Composable
 private fun SkipsCard(liveResponse: LiveAttendanceResponse?, hasData: Boolean) {
     val skips = liveResponse?.intelligence?.safeSkips
     val isSafe = skips?.status?.equals("Safe", ignoreCase = true) ?: true
     val accent = if (isSafe) TrackerColors.SafeEmerald else TrackerColors.DangerRose
-    val headline = when {
-        !hasData || skips == null -> null
-        isSafe -> "${skips.periods} periods"
-        else -> "${skips.classesNeededToRecover} classes"
-    }
-    val targetPct = liveResponse?.intelligence?.targetPct?.toInt() ?: 75
-    val title = if (isSafe) "Periods can skip" else "Classes to attend"
-    val subline = when {
-        !hasData || skips == null -> "Waiting for the attendance snapshot…"
-        isSafe -> "≈ ${skips.days} full days of buffer above the $targetPct% target"
-        else -> "To climb back above the $targetPct% target"
-    }
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(accent.copy(alpha = 0.08f))
-            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = subline,
-                color = TrackerColors.TextSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.SansSerif,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
         Text(
-            text = headline ?: "—",
-            color = TrackerColors.TextPrimary,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.Monospace,
-            maxLines = 1
+            text = "⚡ ",
+            color = if (!hasData || skips == null) TrackerColors.TextMuted else accent,
+            fontSize = 12.sp
+        )
+        Text(
+            text = when {
+                !hasData || skips == null -> "Waiting for attendance snapshot…"
+                isSafe -> "Can skip ${skips.periods} periods · ≈ ${skips.days} days buffer"
+                else -> "Attend ${skips.classesNeededToRecover} classes to recover"
+            },
+            color = if (!hasData || skips == null) TrackerColors.TextMuted else accent,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.SansSerif
         )
     }
 }
@@ -499,44 +466,42 @@ private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(TrackerColors.SurfaceElevated)
-            .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
             .clickable(enabled = !isLoading) { onClick() }
-            .padding(vertical = 13.dp),
+            .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (isLoading) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isLoading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    color = TrackerColors.TextPrimary,
+                    modifier = Modifier.size(11.dp),
+                    color = TrackerColors.TextMuted,
                     strokeWidth = 1.5.dp
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(7.dp))
                 Text(
                     text = "FETCHING…",
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 13.sp,
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.sp
                 )
-            }
-        } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            } else {
                 Text(
-                    text = "Fetch Attendance",
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.SansSerif
+                    text = "↻  ",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 12.sp
                 )
                 Text(
-                    text = "Pull the latest snapshot from the portal",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.SansSerif
+                    text = "FETCH ATTENDANCE",
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
                 )
             }
         }
