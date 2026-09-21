@@ -57,7 +57,6 @@ fun AttendanceScreen() {
     var attendanceData by remember { mutableStateOf<AttendanceResponse?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showValidationDialog by remember { mutableStateOf(false) }
-    var lastFetchDurationMs by remember { mutableStateOf<Long?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -82,14 +81,12 @@ fun AttendanceScreen() {
             isLoading = true
 
             scope.launch {
-                val fetchStartedAt = System.currentTimeMillis()
                 val result = repository.fetchLiveAttendance(
                     rollNo = stored.rollNo,
                     password = stored.password,
                     rememberMe = stored.rememberMe,
                     currentTimeMs = now
                 )
-                lastFetchDurationMs = System.currentTimeMillis() - fetchStartedAt
                 result.fold(
                     onSuccess = { liveResp ->
                         liveAttendanceResponse = liveResp
@@ -130,13 +127,11 @@ fun AttendanceScreen() {
         errorMessage = null
 
         scope.launch {
-            val fetchStartedAt = System.currentTimeMillis()
             val result = repository.fetchLiveAttendance(
                 rollNo = rollNumber,
                 password = password,
                 rememberMe = rememberMe
             )
-            lastFetchDurationMs = System.currentTimeMillis() - fetchStartedAt
             result.fold(
                 onSuccess = { liveResp ->
                     liveAttendanceResponse = liveResp
@@ -308,7 +303,6 @@ fun AttendanceScreen() {
                             data = attendanceData,
                             liveResponse = liveAttendanceResponse,
                             isRefreshing = isLoading,
-                            lastFetchDurationMs = lastFetchDurationMs,
                             onFetchClick = { fetchAttendance() }
                         )
                     }
