@@ -109,18 +109,18 @@ fun DashboardScreen(
                                 .height(IntrinsicSize.Min),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            SkipsPanel(
-                                liveResponse = liveResponse,
-                                hasData = hasData,
-                                modifier = Modifier
-                                    .weight(0.34f)
-                                    .fillMaxHeight()
-                            )
                             TodayPanel(
                                 liveResponse = liveResponse,
                                 hasData = hasData,
                                 modifier = Modifier
-                                    .weight(0.66f)
+                                    .weight(0.6f)
+                                    .fillMaxHeight()
+                            )
+                            SkipsPanel(
+                                liveResponse = liveResponse,
+                                hasData = hasData,
+                                modifier = Modifier
+                                    .weight(0.4f)
                                     .fillMaxHeight()
                             )
                         }
