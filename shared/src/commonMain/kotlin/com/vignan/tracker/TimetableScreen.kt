@@ -987,7 +987,7 @@ private fun TimetableUnavailableCard() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Tap SYNC in the top bar to pull the latest schedule for your section.",
+                text = "Tap FETCH ATTENDANCE on the home tab to pull the latest schedule for your section.",
                 color = TrackerColors.TextSubtle,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.SansSerif,
