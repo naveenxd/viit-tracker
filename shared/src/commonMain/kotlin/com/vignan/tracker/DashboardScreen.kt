@@ -687,6 +687,9 @@ private fun formatFetchedAt(scrapedAt: String?): String {
     if (scrapedAt.isNullOrBlank()) return "—"
     val parsed = runCatching {
         val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        // scrapedAt is UTC (trailing 'Z') — parse as UTC, then render local below,
+        // otherwise the UTC wall-clock leaks through as if it were local time.
+        format.timeZone = java.util.TimeZone.getTimeZone("UTC")
         format.isLenient = false
         format.parse(scrapedAt.trim().substringBefore('.')) ?: return "—"
     }.getOrNull() ?: return "—"
