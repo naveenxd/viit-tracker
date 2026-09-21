@@ -69,6 +69,7 @@ fun DashboardScreen(
     data: AttendanceResponse?,
     liveResponse: LiveAttendanceResponse? = null,
     isRefreshing: Boolean = false,
+    lastFetchDurationMs: Long? = null,
     onFetchClick: () -> Unit = {}
 ) {
     var selectedNavTab by remember { mutableStateOf(MainNavTab.HOME) }
@@ -124,7 +125,15 @@ fun DashboardScreen(
                         )
                     }
 
-                    item { FetchAttendanceButton(isLoading = isRefreshing, onClick = onFetchClick) }
+                    item {
+                        FetchAttendanceButton(
+                            isLoading = isRefreshing,
+                            lastFetchDurationMs = lastFetchDurationMs,
+                            scrapedAt = liveResponse?.scrapedAt,
+                            hasData = hasData,
+                            onClick = onFetchClick
+                        )
+                    }
                 }
 
                 MainNavTab.TIMETABLE -> {
@@ -575,7 +584,13 @@ private fun shortSubjectName(raw: String): String =
 // ---------------------------------------------------------------- fetch
 
 @Composable
-private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
+private fun FetchAttendanceButton(
+    isLoading: Boolean,
+    lastFetchDurationMs: Long?,
+    scrapedAt: String?,
+    hasData: Boolean,
+    onClick: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -583,8 +598,7 @@ private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
             .clickable(enabled = !isLoading) { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 14.dp, vertical = 9.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isLoading) {
@@ -617,8 +631,76 @@ private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
                     letterSpacing = 1.sp
                 )
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Right-aligned status: response time on top, last fetched below
+            Column(horizontalAlignment = Alignment.End) {
+                val durationText = lastFetchDurationMs?.let { formatResponseTime(it) }
+                when {
+                    isLoading -> Text(
+                        text = "— sec",
+                        color = TrackerColors.TextSubtle,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    durationText != null -> Text(
+                        text = "$durationText ⚡",
+                        color = TrackerColors.SafeEmerald,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    hasData -> Text(
+                        text = "cached",
+                        color = TrackerColors.TextSubtle,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                if (!isLoading) {
+                    Text(
+                        text = "fetched ${formatFetchedAt(scrapedAt)}",
+                        color = TrackerColors.TextSubtle,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
+}
+
+/** "2.148 sec" from raw milliseconds. */
+private fun formatResponseTime(ms: Long): String {
+    val seconds = ms / 1000
+    val millis = (ms % 1000).toInt()
+    return "$seconds.${millis.toString().padStart(3, '0')} sec"
+}
+
+/**
+ * ISO scrapedAt → local, compact, human ("21 Sep, 10:12 pm"). Epoch-0 dates
+ * (1970) from upstream clock glitches render as "—" instead of lying.
+ */
+private fun formatFetchedAt(scrapedAt: String?): String {
+    if (scrapedAt.isNullOrBlank()) return "—"
+    val parsed = runCatching {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        format.isLenient = false
+        format.parse(scrapedAt.trim().substringBefore('.')) ?: return "—"
+    }.getOrNull() ?: return "—"
+
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = parsed.time }
+    if (cal.timeInMillis < 10_000L) return "—" // 1970 sentinel → invalid
+
+    val month = java.text.SimpleDateFormat("MMM", java.util.Locale.US)
+        .format(cal.time).uppercase(java.util.Locale.US)
+    val hour12 = cal.get(java.util.Calendar.HOUR)
+    val hour = if (hour12 == 0) 12 else hour12
+    val minute = cal.get(java.util.Calendar.MINUTE).toString().padStart(2, '0')
+    val amPm = if (cal.get(java.util.Calendar.AM_PM) == java.util.Calendar.AM) "am" else "pm"
+    return "${cal.get(java.util.Calendar.DAY_OF_MONTH)} $month, $hour:$minute $amPm"
 }
 
 // ---------------------------------------------------------------- date helpers
