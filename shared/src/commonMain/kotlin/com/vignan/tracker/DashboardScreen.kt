@@ -97,10 +97,11 @@ fun DashboardScreen(
                             overallPercentage = overallPercentage,
                             totalAttended = totalAttended,
                             totalConducted = totalConducted,
-                            liveResponse = liveResponse,
                             hasData = hasData
                         )
                     }
+
+                    item { SkipsCard(liveResponse = liveResponse, hasData = hasData) }
 
                     item { TodayAttendanceCard(liveResponse = liveResponse, hasData = hasData) }
 
@@ -149,7 +150,6 @@ private fun HeroTerminalCard(
     overallPercentage: Double,
     totalAttended: Int,
     totalConducted: Int,
-    liveResponse: LiveAttendanceResponse?,
     hasData: Boolean
 ) {
     val statusColor = when {
@@ -158,8 +158,6 @@ private fun HeroTerminalCard(
         overallPercentage >= 75.0 -> TrackerColors.WarningAmber
         else -> TrackerColors.DangerRose
     }
-
-    val safeSkips = liveResponse?.intelligence?.safeSkips
 
     Box(
         modifier = Modifier
@@ -288,33 +286,65 @@ private fun HeroTerminalCard(
                         .background(statusColor)
                 )
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Safe skips callout
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(TrackerColors.PureBlack)
-                    .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                    .padding(10.dp)
-            ) {
-                Text(
-                    text = when {
-                        !hasData -> "Waiting for the latest attendance snapshot from the portal."
-                        safeSkips != null && safeSkips.status.equals("Safe", ignoreCase = true) ->
-                            "Safe Skips: ${safeSkips.days} days (${safeSkips.periods} periods) buffer remaining."
-                        safeSkips != null ->
-                            "Attend next ${safeSkips.classesNeededToRecover} classes to get back above 75%."
-                        else -> "Target: 75% attendance threshold"
-                    },
-                    color = TrackerColors.TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Serif
-                )
-            }
         }
+    }
+}
+
+/** Standalone skips / recovery card driven by the backend's intelligence block. */
+@Composable
+private fun SkipsCard(liveResponse: LiveAttendanceResponse?, hasData: Boolean) {
+    val skips = liveResponse?.intelligence?.safeSkips
+    val isSafe = skips?.status?.equals("Safe", ignoreCase = true) ?: true
+    val accent = if (isSafe) TrackerColors.SafeEmerald else TrackerColors.DangerRose
+    val headline = when {
+        !hasData || skips == null -> null
+        isSafe -> "${skips.periods} periods"
+        else -> "${skips.classesNeededToRecover} classes"
+    }
+    val targetPct = liveResponse?.intelligence?.targetPct?.toInt() ?: 75
+    val title = if (isSafe) "Periods can skip" else "Classes to attend"
+    val subline = when {
+        !hasData || skips == null -> "Waiting for the attendance snapshot…"
+        isSafe -> "≈ ${skips.days} full days of buffer above the $targetPct% target"
+        else -> "To climb back above the $targetPct% target"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(accent.copy(alpha = 0.08f))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = subline,
+                color = TrackerColors.TextSecondary,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = headline ?: "—",
+            color = TrackerColors.TextPrimary,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Black,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1
+        )
     }
 }
 
@@ -366,7 +396,6 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
         .maxByOrNull { it.second }?.first
         ?: entries.lastOrNull()
     val entry = todaysEntry ?: latestEntry
-    val isToday = todaysEntry != null
 
     Box(
         modifier = Modifier
@@ -383,23 +412,6 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.SansSerif,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = when {
-                    entry == null -> ""
-                    isToday -> "TODAY"
-                    else -> "LAST MARKED · ${friendlyDateLabel(entry.date)}"
-                },
-                color = if (isToday) TrackerColors.SafeEmerald else TrackerColors.TextSubtle,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.sp,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
@@ -638,12 +650,6 @@ private fun isSameCalendarDay(aMs: Long?, bMs: Long): Boolean {
     val b = java.util.Calendar.getInstance().apply { timeInMillis = bMs }
     return a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR) &&
             a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
-}
-
-/** Human label for a register date — weekday + dd MMM ("Sun, 21 Sep") or raw fallback. */
-private fun friendlyDateLabel(raw: String): String {
-    val ms = parseLooseDate(raw) ?: return raw.trim()
-    return java.text.SimpleDateFormat("EEE, dd MMM", java.util.Locale.US).format(java.util.Date(ms))
 }
 
 // ---------------------------------------------------------------- nav bar
