@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,7 +53,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +67,6 @@ fun DashboardScreen(
     data: AttendanceResponse?,
     liveResponse: LiveAttendanceResponse? = null,
     isRefreshing: Boolean = false,
-    lastFetchDurationMs: Long? = null,
     onFetchClick: () -> Unit = {}
 ) {
     var selectedNavTab by remember { mutableStateOf(MainNavTab.HOME) }
@@ -101,19 +101,32 @@ fun DashboardScreen(
                         )
                     }
 
-                    item { SkipsCard(liveResponse = liveResponse, hasData = hasData) }
-
-                    item { TodayAttendanceCard(liveResponse = liveResponse, hasData = hasData) }
+                    item {
+                        // Skips stat tile (~1/3) beside today's badge panel (~2/3)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            SkipsPanel(
+                                liveResponse = liveResponse,
+                                hasData = hasData,
+                                modifier = Modifier
+                                    .weight(0.34f)
+                                    .fillMaxHeight()
+                            )
+                            TodayPanel(
+                                liveResponse = liveResponse,
+                                hasData = hasData,
+                                modifier = Modifier
+                                    .weight(0.66f)
+                                    .fillMaxHeight()
+                            )
+                        }
+                    }
 
                     item { FetchAttendanceButton(isLoading = isRefreshing, onClick = onFetchClick) }
-
-                    item {
-                        LastUpdatedFooter(
-                            scrapedAt = liveResponse?.scrapedAt,
-                            fetchDurationMs = lastFetchDurationMs,
-                            hasData = hasData
-                        )
-                    }
                 }
 
                 MainNavTab.TIMETABLE -> {
@@ -284,34 +297,78 @@ private fun HeroTerminalCard(
     }
 }
 
-/** Minimal one-line skips / recovery status from the backend's intelligence block. */
+/** Compact vertical stat tile: skippable periods (or classes to recover). */
 @Composable
-private fun SkipsCard(liveResponse: LiveAttendanceResponse?, hasData: Boolean) {
+private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, modifier: Modifier = Modifier) {
     val skips = liveResponse?.intelligence?.safeSkips
     val isSafe = skips?.status?.equals("Safe", ignoreCase = true) ?: true
     val accent = if (isSafe) TrackerColors.SafeEmerald else TrackerColors.DangerRose
+    val waiting = !hasData || skips == null
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "⚡ ",
-            color = if (!hasData || skips == null) TrackerColors.TextMuted else accent,
-            fontSize = 12.sp
-        )
-        Text(
-            text = when {
-                !hasData || skips == null -> "Waiting for attendance snapshot…"
-                isSafe -> "Can skip ${skips.periods} periods · ≈ ${skips.days} days buffer"
-                else -> "Attend ${skips.classesNeededToRecover} classes to recover"
-            },
-            color = if (!hasData || skips == null) TrackerColors.TextMuted else accent,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.SansSerif
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "⚡",
+                color = if (waiting) TrackerColors.TextMuted else accent,
+                fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = when {
+                    waiting -> "—"
+                    isSafe -> "${skips.periods}"
+                    else -> "${skips.classesNeededToRecover}"
+                },
+                color = if (waiting) TrackerColors.TextMuted else accent,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace
+            )
+            Text(
+                text = when {
+                    waiting -> "PERIODS"
+                    isSafe -> "PERIODS"
+                    else -> "CLASSES"
+                },
+                color = TrackerColors.TextMuted,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.2.sp
+            )
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = when {
+                    waiting -> "SYNCING"
+                    isSafe -> "CAN SKIP"
+                    else -> "TO ATTEND"
+                },
+                color = if (waiting) TrackerColors.TextMuted else accent,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif,
+                letterSpacing = 0.6.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = when {
+                    waiting -> "Snapshot pending"
+                    isSafe -> "≈ ${skips.days} days buffer"
+                    else -> "to recover 75%"
+                },
+                color = TrackerColors.TextMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 1
+            )
+        }
     }
 }
 
@@ -352,7 +409,11 @@ private fun StatusPill(hasData: Boolean, overallPercentage: Double, statusColor:
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: Boolean) {
+private fun TodayPanel(
+    liveResponse: LiveAttendanceResponse?,
+    hasData: Boolean,
+    modifier: Modifier = Modifier
+) {
     val entries = liveResponse?.attendance?.today.orEmpty()
 
     // Pick today's entry by parsing its date; fall back to the most recent one.
@@ -365,42 +426,36 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
     val entry = todaysEntry ?: latestEntry
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
             .padding(12.dp)
     ) {
-        Column {
+        Column(verticalArrangement = Arrangement.Center) {
             Text(
                 text = "Today attendance status",
                 color = TrackerColors.TextPrimary,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.SansSerif,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
+                maxLines = 1
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
             when {
                 !hasData -> Text(
-                    text = "Waiting for the latest attendance snapshot…",
+                    text = "Waiting for the latest snapshot…",
                     color = TrackerColors.TextMuted,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    fontFamily = FontFamily.SansSerif
                 )
                 entry == null || entry.badges.isEmpty() -> Text(
                     text = "No attendance recorded for today.",
                     color = TrackerColors.TextSubtle,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    fontFamily = FontFamily.SansSerif
                 )
                 else -> FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -459,7 +514,7 @@ private fun TodayBadgeChip(subject: String, status: String) {
 private fun shortSubjectName(raw: String): String =
     raw.split(" - ").first().trim().uppercase().ifBlank { "SUBJECT" }
 
-// ---------------------------------------------------------------- fetch + footer
+// ---------------------------------------------------------------- fetch
 
 @Composable
 private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
@@ -506,67 +561,6 @@ private fun FetchAttendanceButton(isLoading: Boolean, onClick: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun LastUpdatedFooter(scrapedAt: String?, fetchDurationMs: Long?, hasData: Boolean) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Last updated: ${formatScrapedAt(scrapedAt)}",
-            color = TrackerColors.TextSecondary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.SansSerif
-        )
-        Spacer(modifier = Modifier.height(3.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            when {
-                fetchDurationMs != null -> {
-                    Text(
-                        text = "Response time: ",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                    Text(
-                        text = "${formatResponseTime(fetchDurationMs)} ⚡",
-                        color = TrackerColors.SafeEmerald,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                hasData -> Text(
-                    text = "Cached snapshot shown",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
-    }
-}
-
-/** Renders the server's scrapedAt ("21/09/2026, 05:55:13 pm") in a compact form; falls back to raw. */
-private fun formatScrapedAt(scrapedAt: String?): String {
-    if (scrapedAt.isNullOrBlank()) return "—"
-    val cleaned = scrapedAt.trim()
-    return runCatching {
-        val inFormat = java.text.SimpleDateFormat("dd/MM/yyyy, hh:mm:ss a", java.util.Locale.US)
-        val outFormat = java.text.SimpleDateFormat("dd/MM/yyyy, hh:mm a", java.util.Locale.US)
-        val date = inFormat.parse(cleaned.uppercase()) ?: return cleaned
-        outFormat.format(date)
-    }.getOrDefault(cleaned)
-}
-
-private fun formatResponseTime(ms: Long): String {
-    val seconds = ms / 1000
-    val millis = (ms % 1000).toInt()
-    return "$seconds.${millis.toString().padStart(3, '0')} sec"
 }
 
 // ---------------------------------------------------------------- date helpers
