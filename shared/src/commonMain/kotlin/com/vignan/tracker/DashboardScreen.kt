@@ -393,7 +393,7 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
                 text = when {
                     entry == null -> ""
                     isToday -> "TODAY"
-                    else -> "LAST RECORDED · ${compactDate(entry.date)}"
+                    else -> "LAST MARKED · ${friendlyDateLabel(entry.date)}"
                 },
                 color = if (isToday) TrackerColors.SafeEmerald else TrackerColors.TextSubtle,
                 fontSize = 9.sp,
@@ -443,11 +443,10 @@ private fun TodayAttendanceCard(liveResponse: LiveAttendanceResponse?, hasData: 
 @Composable
 private fun TodayBadgeChip(subject: String, status: String) {
     val normalized = status.trim().uppercase()
-    val accent = when {
-        normalized == "P" -> TrackerColors.SafeEmerald
-        normalized == "PP" || normalized == "L" -> TrackerColors.WarningAmber
-        else -> TrackerColors.DangerRose
-    }
+    // Portal tokens are P/A runs: "P", "PP", "PPP"… all present; "A", "AA"… all
+    // absent. Any A in the cell means the subject was skipped at least once.
+    val wasAbsent = normalized.any { it == 'A' }
+    val accent = if (wasAbsent) TrackerColors.DangerRose else TrackerColors.SafeEmerald
 
     Box(
         modifier = Modifier
@@ -601,13 +600,15 @@ private fun parseLooseDate(raw: String?): Long? {
     val cleaned = raw.trim().uppercase()
 
     // Register dates are bare "DD/MM" (no year) — resolve against the current year.
+    // Anchor to today first; never Calendar.clear() (on ART it forces a recompute
+    // from zeroed fields and lands back in 1970).
     if (cleaned.length == 5 && cleaned[2] == '/') {
         val dd = cleaned.substring(0, 2).toIntOrNull()
         val mm = cleaned.substring(3, 5).toIntOrNull()
         if (dd != null && mm != null && dd in 1..31 && mm in 1..12) {
             val cal = java.util.Calendar.getInstance()
-            cal.clear()
-            cal.set(cal.get(java.util.Calendar.YEAR), mm - 1, dd)
+            cal.set(java.util.Calendar.MONTH, mm - 1)
+            cal.set(java.util.Calendar.DAY_OF_MONTH, dd)
             return cal.timeInMillis
         }
     }
@@ -639,10 +640,10 @@ private fun isSameCalendarDay(aMs: Long?, bMs: Long): Boolean {
             a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
 }
 
-/** Compacts a raw date string to dd/MM/yyyy when recognizable; otherwise returns it trimmed. */
-private fun compactDate(raw: String): String {
+/** Human label for a register date — weekday + dd MMM ("Sun, 21 Sep") or raw fallback. */
+private fun friendlyDateLabel(raw: String): String {
     val ms = parseLooseDate(raw) ?: return raw.trim()
-    return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US).format(java.util.Date(ms))
+    return java.text.SimpleDateFormat("EEE, dd MMM", java.util.Locale.US).format(java.util.Date(ms))
 }
 
 // ---------------------------------------------------------------- nav bar
