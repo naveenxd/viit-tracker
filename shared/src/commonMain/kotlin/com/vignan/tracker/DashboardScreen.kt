@@ -297,7 +297,7 @@ private fun HeroTerminalCard(
     }
 }
 
-/** Compact vertical stat tile: skippable periods (or classes to recover). */
+/** Compact stat tile: skippable periods (or classes to recover), accent-edged. */
 @Composable
 private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, modifier: Modifier = Modifier) {
     val skips = liveResponse?.intelligence?.safeSkips
@@ -310,64 +310,78 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
             .clip(RoundedCornerShape(14.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(12.dp),
-        contentAlignment = Alignment.Center
+            .padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "⚡",
-                color = if (waiting) TrackerColors.TextMuted else accent,
-                fontSize = 14.sp
+        Row {
+            // Accent edge, same language as the timetable subject bars
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(if (waiting) TrackerColors.HairlineBorder else accent)
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = when {
-                    waiting -> "—"
-                    isSafe -> "${skips.periods}"
-                    else -> "${skips.classesNeededToRecover}"
-                },
-                color = if (waiting) TrackerColors.TextMuted else accent,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace
-            )
-            Text(
-                text = when {
-                    waiting -> "PERIODS"
-                    isSafe -> "PERIODS"
-                    else -> "CLASSES"
-                },
-                color = TrackerColors.TextMuted,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp
-            )
-            Spacer(modifier = Modifier.height(5.dp))
-            Text(
-                text = when {
-                    waiting -> "SYNCING"
-                    isSafe -> "CAN SKIP"
-                    else -> "TO ATTEND"
-                },
-                color = if (waiting) TrackerColors.TextMuted else accent,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                letterSpacing = 0.6.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = when {
-                    waiting -> "Snapshot pending"
-                    isSafe -> "≈ ${skips.days} days buffer"
-                    else -> "to recover 75%"
-                },
-                color = TrackerColors.TextMuted,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.SansSerif,
-                maxLines = 1
-            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "⚡ ",
+                        color = if (waiting) TrackerColors.TextMuted else accent,
+                        fontSize = 10.sp
+                    )
+                    Text(
+                        text = when {
+                            waiting -> "SYNCING"
+                            isSafe -> "CAN SKIP"
+                            else -> "ATTEND"
+                        },
+                        color = if (waiting) TrackerColors.TextMuted else accent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.2.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = when {
+                            waiting -> "—"
+                            isSafe -> "${skips.periods}"
+                            else -> "${skips.classesNeededToRecover}"
+                        },
+                        color = if (waiting) TrackerColors.TextMuted else TrackerColors.TextPrimary,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = if (isSafe || waiting) "periods" else "classes",
+                        color = TrackerColors.TextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.SansSerif,
+                        modifier = Modifier.padding(bottom = 5.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = when {
+                        waiting -> "snapshot pending"
+                        isSafe -> "≈ ${skips.days} days buffer"
+                        else -> "to reach 75%"
+                    },
+                    color = TrackerColors.TextMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
