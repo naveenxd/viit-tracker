@@ -13,6 +13,10 @@ interface CredentialStore {
     suspend fun clear()
     suspend fun getCachedAttendance(): String?
     suspend fun saveCachedAttendance(json: String)
+
+    /** Resolved worker base URL, persisted to skip the KV lookup on cold starts. */
+    suspend fun getApiBaseUrl(): String?
+    suspend fun saveApiBaseUrl(url: String)
 }
 
 expect fun getCredentialStore(): CredentialStore

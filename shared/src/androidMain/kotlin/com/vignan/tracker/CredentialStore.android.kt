@@ -13,7 +13,12 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
     private var inMemoryCreds: StoredCredentials? = null
     private var inMemoryCache: String? = null
 
+    // EncryptedSharedPreferences creation runs master-key crypto — expensive.
+    // Build once and reuse; rebuilding per call was a measurable cold-start cost.
+    private var cachedPrefs: SharedPreferences? = null
+
     private fun getPrefs(): SharedPreferences? {
+        cachedPrefs?.let { return it }
         val ctx = contextProvider() ?: return null
         return try {
             EncryptedSharedPreferences.create(
@@ -24,9 +29,10 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
                     .build(),
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            ).also { cachedPrefs = it }
         } catch (e: Exception) {
             ctx.getSharedPreferences("viit_secure_prefs_fallback", Context.MODE_PRIVATE)
+                .also { cachedPrefs = it }
         }
     }
 
@@ -66,6 +72,16 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         inMemoryCache = json
         val prefs = getPrefs() ?: return
         prefs.edit().putString("cached_attendance_json", json).apply()
+    }
+
+    override suspend fun getApiBaseUrl(): String? {
+        val prefs = getPrefs() ?: return null
+        return prefs.getString("api_base_url", null)
+    }
+
+    override suspend fun saveApiBaseUrl(url: String) {
+        val prefs = getPrefs() ?: return
+        prefs.edit().putString("api_base_url", url).apply()
     }
 }
 

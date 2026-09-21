@@ -4,8 +4,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class AttendanceRepository(
-    private val api: ApiClient = ApiClient(),
     private val store: CredentialStore = getCredentialStore(),
+    private val api: ApiClient = ApiClient(
+        baseUrlProvider = { store.getApiBaseUrl() },
+        onBaseUrlResolved = { store.saveApiBaseUrl(it) }
+    ),
 ) {
     private val loginMutex = Mutex()
     private var loginAttempts = 0

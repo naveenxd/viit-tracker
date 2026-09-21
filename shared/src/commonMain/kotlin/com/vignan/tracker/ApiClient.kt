@@ -20,7 +20,11 @@ sealed class ApiError : Exception() {
 
 class ApiClient(
     private val kvConfigUrl: String = "https://kv.devh.in/kv/01a0be26-998f-7f10-af66-394511241190/API",
-    private val apiKeyProvider: () -> String? = { null }
+    private val apiKeyProvider: () -> String? = { null },
+    /** Persisted lookup consulted before hitting the KV endpoint on cold starts. */
+    private val baseUrlProvider: suspend () -> String? = { null },
+    /** Called when a KV resolve succeeds, so the URL can be persisted for next time. */
+    private val onBaseUrlResolved: suspend (String) -> Unit = {}
 ) {
     private var cachedBaseUrl: String? = null
 
@@ -37,6 +41,14 @@ class ApiClient(
 
     private suspend fun getBaseUrl(): String {
         cachedBaseUrl?.let { return it }
+
+        // Skip the KV round trip when a previously resolved URL is stored.
+        baseUrlProvider()?.let { stored ->
+            if (stored.isNotBlank()) {
+                cachedBaseUrl = stored
+                return stored
+            }
+        }
 
         return try {
             val response = client.get(kvConfigUrl)
@@ -55,9 +67,10 @@ class ApiClient(
                     throw ApiError.Upstream("Unable to extract valid API URL from KV response")
                 }
 
-                val cleanUrl = extractedUrl.trimEnd('/')
-                cachedBaseUrl = cleanUrl
-                cleanUrl
+            val cleanUrl = extractedUrl.trimEnd('/')
+            cachedBaseUrl = cleanUrl
+            onBaseUrlResolved(cleanUrl)
+            cleanUrl
             } else {
                 throw ApiError.Upstream("Failed to resolve API endpoint from remote KV store")
             }
