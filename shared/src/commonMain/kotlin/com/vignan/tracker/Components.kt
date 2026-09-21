@@ -30,30 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.ceil
-import kotlin.math.floor
 import kotlin.math.roundToInt
-
-enum class SubjectFilter {
-    ALL, AT_RISK, SAFE
-}
-
-sealed interface AttendanceInsight {
-    data class Safe(val canSkipClasses: Int) : AttendanceInsight
-    data class AtRisk(val requiredClasses: Int) : AttendanceInsight
-}
-
-fun calculateMargin(attended: Int, conducted: Int): AttendanceInsight {
-    if (conducted <= 0) return AttendanceInsight.Safe(0)
-    val pct = (attended.toDouble() / conducted) * 100.0
-    return if (pct >= 75.0) {
-        val canSkip = floor((4.0 * attended - 3.0 * conducted) / 3.0).toInt()
-        AttendanceInsight.Safe(maxOf(0, canSkip))
-    } else {
-        val mustAttend = ceil(3.0 * conducted - 4.0 * attended).toInt()
-        AttendanceInsight.AtRisk(maxOf(1, mustAttend))
-    }
-}
 
 /**
  * Formats a percentage exactly as received — up to 2 decimals, trailing zeros trimmed.
