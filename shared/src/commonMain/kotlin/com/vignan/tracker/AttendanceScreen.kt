@@ -57,11 +57,9 @@ fun AttendanceScreen() {
     var attendanceData by remember { mutableStateOf<AttendanceResponse?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showValidationDialog by remember { mutableStateOf(false) }
+    var lastFetchDurationMs by remember { mutableStateOf<Long?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf(SubjectFilter.ALL) }
 
     // Instant launch: Load stored session & cache immediately without showing login screen
     LaunchedEffect(Unit) {
@@ -84,12 +82,14 @@ fun AttendanceScreen() {
             isLoading = true
 
             scope.launch {
+                val fetchStartedAt = System.currentTimeMillis()
                 val result = repository.fetchLiveAttendance(
                     rollNo = stored.rollNo,
                     password = stored.password,
                     rememberMe = stored.rememberMe,
                     currentTimeMs = now
                 )
+                lastFetchDurationMs = System.currentTimeMillis() - fetchStartedAt
                 result.fold(
                     onSuccess = { liveResp ->
                         liveAttendanceResponse = liveResp
@@ -130,11 +130,13 @@ fun AttendanceScreen() {
         errorMessage = null
 
         scope.launch {
+            val fetchStartedAt = System.currentTimeMillis()
             val result = repository.fetchLiveAttendance(
                 rollNo = rollNumber,
                 password = password,
                 rememberMe = rememberMe
             )
+            lastFetchDurationMs = System.currentTimeMillis() - fetchStartedAt
             result.fold(
                 onSuccess = { liveResp ->
                     liveAttendanceResponse = liveResp
@@ -244,8 +246,6 @@ fun AttendanceScreen() {
         topBar = {
             HeaderBar(
                 isLoggedIn = isSessionActive,
-                isLoading = isLoading,
-                onRefresh = { fetchAttendance() },
                 onLogout = {
                     scope.launch { repository.logout() }
                     isSessionActive = false
@@ -307,11 +307,9 @@ fun AttendanceScreen() {
                         DashboardScreen(
                             data = attendanceData,
                             liveResponse = liveAttendanceResponse,
-                            isLoading = isLoading,
-                            searchQuery = searchQuery,
-                            onSearchQueryChange = { searchQuery = it },
-                            selectedFilter = selectedFilter,
-                            onFilterSelect = { selectedFilter = it }
+                            isRefreshing = isLoading,
+                            lastFetchDurationMs = lastFetchDurationMs,
+                            onFetchClick = { fetchAttendance() }
                         )
                     }
                 }
