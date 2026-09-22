@@ -134,6 +134,13 @@ fun DashboardScreen(
                             onClick = onFetchClick
                         )
                     }
+
+                    item {
+                        ProjectionCard(
+                            liveResponse = liveResponse,
+                            hasData = hasData
+                        )
+                    }
                 }
 
                 MainNavTab.TIMETABLE -> {
