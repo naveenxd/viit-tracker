@@ -55,6 +55,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signed with the debug key so local release builds install directly;
+            // swap for a real signing config before any distribution.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

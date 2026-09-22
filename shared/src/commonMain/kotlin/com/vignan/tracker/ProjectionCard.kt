@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +42,7 @@ import androidx.compose.ui.unit.sp
  */
 data class ProjectionRow(
     val dateMs: Long,
+    val dateText: String,      // display-ready; formatted once per projection build
     val classesThatDay: Int,   // classes added to the tally by this day
     val attended: Int,         // cumulative at the END of this day
     val held: Int,
@@ -88,6 +88,9 @@ fun buildAttendanceProjection(live: LiveAttendanceResponse, days: Int): List<Pro
     val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
     val scrapeMinute = parseScrapedMinute(live.scrapedAt)
     val cal = java.util.Calendar.getInstance()
+    // One formatter reused for every row — SimpleDateFormat construction is
+    // expensive and must never happen per row / per recomposition.
+    val dateFormat = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.US)
 
     var attended = agg.attended
     var held = agg.held
@@ -96,6 +99,7 @@ fun buildAttendanceProjection(live: LiveAttendanceResponse, days: Int): List<Pro
     // Row 0 — the snapshot itself ("present attendance").
     rows += ProjectionRow(
         dateMs = cal.timeInMillis,
+        dateText = dateFormat.format(java.util.Date(cal.timeInMillis)),
         classesThatDay = classesRemainingToday(weekly[dayMapIndex(cal)].orEmpty(), scrapeMinute),
         attended = attended,
         held = held,
@@ -111,6 +115,7 @@ fun buildAttendanceProjection(live: LiveAttendanceResponse, days: Int): List<Pro
         held += classes
         rows += ProjectionRow(
             dateMs = cal.timeInMillis,
+            dateText = dateFormat.format(java.util.Date(cal.timeInMillis)),
             classesThatDay = classes,
             attended = attended,
             held = held,
@@ -124,9 +129,6 @@ fun buildAttendanceProjection(live: LiveAttendanceResponse, days: Int): List<Pro
 // ---------------------------------------------------------------- card
 
 private val PROJECTION_RANGES = listOf(30, 60)
-
-/** Max rows visible before the list scrolls internally (keeps the card compact). */
-private const val VISIBLE_ROWS = 12
 
 @Composable
 fun ProjectionCard(
@@ -161,12 +163,22 @@ fun ProjectionCard(
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "End of each day, if you attend everything. N = periods you can still skip.",
+                        text = "End of each day, if you attend everything.",
                         color = TrackerColors.TextMuted,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.SansSerif,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "N = PERIODS YOU CAN STILL SKIP",
+                        color = TrackerColors.TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.2.sp,
+                        maxLines = 1
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -200,14 +212,12 @@ fun ProjectionCard(
                     fontFamily = FontFamily.SansSerif
                 )
                 else -> {
-                    val visible = minOf(rows.size, VISIBLE_ROWS)
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height((visible * 31 - 3).dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        items(rows.size) { i -> ProjectionLine(row = rows[i]) }
+                    // Plain Column, NOT a nested LazyColumn: the card lives inside
+                    // the dashboard's LazyColumn, and same-direction nested lazy
+                    // lists fight over scroll gestures and re-measure every frame.
+                    // The outer list already virtualizes this card wholesale.
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        rows.forEach { row -> ProjectionLine(row = row) }
                     }
                 }
             }
@@ -241,16 +251,13 @@ private fun RangeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun ProjectionLine(row: ProjectionRow) {
-    val dateText = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.US)
-        .format(java.util.Date(row.dateMs))
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(28.dp)
-            .clip(RoundedCornerShape(7.dp))
-            .background(TrackerColors.SurfaceCard)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(6.dp))
             .padding(horizontal = 10.dp)
     ) {
         Row(
@@ -258,7 +265,7 @@ private fun ProjectionLine(row: ProjectionRow) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = dateText,
+                text = row.dateText,
                 color = TrackerColors.TextPrimary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
