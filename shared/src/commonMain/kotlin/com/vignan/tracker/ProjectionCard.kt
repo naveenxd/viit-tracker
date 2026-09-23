@@ -71,30 +71,12 @@ private fun dayMapIndex(cal: java.util.Calendar): Int = cal.get(java.util.Calend
 private fun scheduledClasses(weekly: Map<Int, List<TTItem>>, mapIdx: Int): Int =
     weekly[mapIdx].orEmpty().sumOf { it.slots.size }
 
-/** "2026-09-22T20:07:57" → minutes-of-day (1207), or null when unusable. */
-private fun parseScrapedMinute(scrapedAt: String?): Int? {
-    if (scrapedAt == null || scrapedAt.length < 16 || scrapedAt.getOrNull(10) != 'T') return null
-    val h = scrapedAt.substring(11, 13).toIntOrNull() ?: return null
-    val m = scrapedAt.substring(14, 16).toIntOrNull() ?: return null
-    if (h !in 0..23 || m !in 0..59) return null
-    return h * 60 + m
-}
-
-/**
- * Today's row counts only classes still ahead at scrape time: everything with
- * endMin already past is assumed attended and is already inside the snapshot.
- */
-private fun classesRemainingToday(items: List<TTItem>, nowMinute: Int?): Int {
-    val total = items.sumOf { it.slots.size }
-    if (nowMinute == null) return total
-    val elapsed = items.sumOf { if (it.endMin <= nowMinute) it.slots.size else 0 }
-    return (total - elapsed).coerceIn(0, total)
-}
-
 /**
  * Builds the attendance projection list for the given number of days.
+ * - Row 0 represents the baseline: current end-of-day attendance snapshot directly from data.
+ * - Future days (starting tomorrow) project attendance assuming scheduled classes are attended,
+ *   or missed if included in [absentDates].
  * - Sundays are present in sequence but marked [isSunday = true] (0 classes, greyed out).
- * - Simulates absences specified in [absentDates], cascading cumulative impacts.
  */
 fun buildAttendanceProjection(
     live: LiveAttendanceResponse,
@@ -105,7 +87,6 @@ fun buildAttendanceProjection(
     if (agg.held <= 0) return emptyList()
 
     val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
-    val scrapeMinute = parseScrapedMinute(live.scrapedAt)
     val cal = java.util.Calendar.getInstance()
     // "d MMM" (e.g. "23 Sep") keeps dates compact and guarantees room for labels without clipping
     val dateFormat = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
@@ -114,47 +95,23 @@ fun buildAttendanceProjection(
     var held = agg.held
     val rows = mutableListOf<ProjectionRow>()
 
-    // Row 0 — Today's baseline
+    // Row 0 — Today's baseline: represents current standing from scraped data (no added classes)
     val isTodaySunday = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
     val todayDateText = dateFormat.format(java.util.Date(cal.timeInMillis))
 
-    if (isTodaySunday) {
-        rows += ProjectionRow(
-            dateMs = cal.timeInMillis,
-            dateText = todayDateText,
-            isSunday = true,
-            classesThatDay = 0,
-            attended = attended,
-            held = held,
-            percentage = if (held > 0) attended * 100.0 / held else 0.0,
-            skippable = skippablePeriods(attended, held),
-            isAbsent = false
-        )
-    } else {
-        val todayClasses = classesRemainingToday(weekly[dayMapIndex(cal)].orEmpty(), scrapeMinute)
-        val isTodayAbsent = todayDateText in absentDates
+    rows += ProjectionRow(
+        dateMs = cal.timeInMillis,
+        dateText = todayDateText,
+        isSunday = isTodaySunday,
+        classesThatDay = 0,
+        attended = attended,
+        held = held,
+        percentage = if (held > 0) attended * 100.0 / held else 0.0,
+        skippable = skippablePeriods(attended, held),
+        isAbsent = false
+    )
 
-        if (isTodayAbsent) {
-            held += todayClasses
-        } else {
-            attended += todayClasses
-            held += todayClasses
-        }
-
-        rows += ProjectionRow(
-            dateMs = cal.timeInMillis,
-            dateText = todayDateText,
-            isSunday = false,
-            classesThatDay = todayClasses,
-            attended = attended,
-            held = held,
-            percentage = if (held > 0) attended * 100.0 / held else 0.0,
-            skippable = skippablePeriods(attended, held),
-            isAbsent = isTodayAbsent
-        )
-    }
-
-    // Future days: iterate until we reach requested count of days
+    // Future days: iterate starting tomorrow until we reach requested count of days
     while (rows.size < days) {
         cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
 
@@ -457,9 +414,9 @@ private fun ProjectionLine(
             .clip(RoundedCornerShape(6.dp))
             .then(if (row.isSunday) Modifier.alpha(0.35f) else Modifier)
     ) {
-        // Background reveal ONLY when swiping actively (dragOffset < -8f)
+        // Background reveal ONLY when swiping actively on future days (dragOffset < -8f)
         // If absent, shows neutral "RESTORE" to prevent ANY green-on-red overlap!
-        if (!row.isSunday && dragOffset < -8f) {
+        if (!row.isSunday && !isToday && dragOffset < -8f) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
@@ -479,7 +436,7 @@ private fun ProjectionLine(
             }
         }
 
-        // Foreground content with swipe gesture & tap to toggle
+        // Foreground content with swipe gesture & tap to toggle (future days only)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -488,7 +445,7 @@ private fun ProjectionLine(
                 .background(rowBackground)
                 .border(1.dp, rowBorder, RoundedCornerShape(6.dp))
                 .then(
-                    if (!row.isSunday) {
+                    if (!row.isSunday && !isToday) {
                         Modifier
                             .pointerInput(row.dateText, row.isAbsent) {
                                 detectHorizontalDragGestures(
