@@ -162,7 +162,7 @@ fun buildAttendanceProjection(
 
 // ---------------------------------------------------------------- card
 
-private val PROJECTION_RANGES = listOf(30, 60)
+private val PROJECTION_RANGES = listOf(10, 30, 60)
 
 @Composable
 fun ProjectionCard(
@@ -170,7 +170,7 @@ fun ProjectionCard(
     hasData: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var range by remember { mutableStateOf(30) }
+    var range by remember { mutableStateOf(10) }
     var absentDates by remember { mutableStateOf(setOf<String>()) }
 
     val rows = remember(liveResponse, range, absentDates) {
