@@ -1,9 +1,13 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +34,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
@@ -42,7 +54,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -57,10 +68,12 @@ fun LoginScreen(
     rememberMe: Boolean = true,
     onRememberMeChange: (Boolean) -> Unit = {},
     isLoading: Boolean,
+    errorMessage: String? = null,
     onSubmit: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
+    val passwordFocusRequester = remember { FocusRequester() }
 
     Column(
         modifier = Modifier
@@ -77,31 +90,67 @@ fun LoginScreen(
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // Clean Login Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(16.dp))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
                 .padding(20.dp)
         ) {
             Column {
-                // Centered LOGIN Header
+                // Header
                 Text(
-                    text = "LOGIN",
+                    text = "SIGN IN",
                     color = TrackerColors.TextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.SansSerif,
-                    letterSpacing = 2.5.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 22.dp)
+                    letterSpacing = 2.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Enter your portal credentials to sync attendance",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.SansSerif
                 )
 
+                // Inline Error (if active)
+                if (!errorMessage.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(TrackerColors.DangerRoseSubtle)
+                            .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(TrackerColors.DangerRose)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = errorMessage,
+                                color = TrackerColors.TextPrimary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Registration Number
                 Text(
                     text = "REGISTRATION NUMBER",
                     color = TrackerColors.TextSubtle,
@@ -114,12 +163,30 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = rollNumber,
-                    onValueChange = onRollNumberChange,
+                    onValueChange = { onRollNumberChange(it.uppercase().trim()) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    trailingIcon = {
+                        if (rollNumber.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { onRollNumberChange("") }
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "✕",
+                                    color = TrackerColors.TextMuted,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    },
                     placeholder = {
                         Text(
-                            text = "e.g. 26L35A4699",
+                            text = "e.g. 22B91A0501",
                             color = TrackerColors.TextSubtle,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace
@@ -128,6 +195,7 @@ fun LoginScreen(
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
                         color = TrackerColors.TextPrimary
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -136,17 +204,22 @@ fun LoginScreen(
                         focusedBorderColor = TrackerColors.HairlineBorderLight,
                         unfocusedBorderColor = TrackerColors.HairlineBorder,
                         focusedTextColor = TrackerColors.TextPrimary,
-                        unfocusedTextColor = TrackerColors.TextPrimary
+                        unfocusedTextColor = TrackerColors.TextPrimary,
+                        cursorColor = TrackerColors.TextPrimary
                     ),
                     shape = RoundedCornerShape(8.dp),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Ascii,
                         imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { passwordFocusRequester.requestFocus() }
                     )
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // Password
                 Text(
                     text = "PASSWORD",
                     color = TrackerColors.TextSubtle,
@@ -160,11 +233,13 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = password,
                     onValueChange = onPasswordChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(passwordFocusRequester),
                     singleLine = true,
                     placeholder = {
                         Text(
-                            text = "Password",
+                            text = "Portal password",
                             color = TrackerColors.TextSubtle,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.SansSerif
@@ -196,7 +271,8 @@ fun LoginScreen(
                         focusedBorderColor = TrackerColors.HairlineBorderLight,
                         unfocusedBorderColor = TrackerColors.HairlineBorder,
                         focusedTextColor = TrackerColors.TextPrimary,
-                        unfocusedTextColor = TrackerColors.TextPrimary
+                        unfocusedTextColor = TrackerColors.TextPrimary,
+                        cursorColor = TrackerColors.TextPrimary
                     ),
                     shape = RoundedCornerShape(8.dp),
                     keyboardOptions = KeyboardOptions(
@@ -212,42 +288,33 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Keep Me Logged In Checkbox Row
+                val interactionSource = remember { MutableInteractionSource() }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onRememberMeChange(!rememberMe) }
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null
+                        ) { onRememberMeChange(!rememberMe) }
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (rememberMe) TrackerColors.PrimaryWhite else TrackerColors.SurfaceInput)
-                            .border(1.dp, if (rememberMe) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder, RoundedCornerShape(4.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (rememberMe) {
-                            Text(
-                                text = "✓",
-                                color = TrackerColors.PureBlack,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    CleanCheckbox(
+                        checked = rememberMe,
+                        onCheckedChange = onRememberMeChange
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "KEEP ME LOGGED IN",
+                        text = "Keep me signed in",
                         color = TrackerColors.TextSecondary,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.SansSerif
                     )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                // Primary Submit CTA
                 Button(
                     onClick = {
                         focusManager.clearFocus()
@@ -256,7 +323,7 @@ fun LoginScreen(
                     enabled = !isLoading,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp),
+                        .height(46.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TrackerColors.PrimaryWhite,
@@ -269,25 +336,25 @@ fun LoginScreen(
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
                             color = TrackerColors.PureBlack,
-                            strokeWidth = 1.8.dp
+                            strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "LOGGING IN...",
+                            text = "SIGNING IN...",
                             color = TrackerColors.PureBlack,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.SansSerif,
-                            letterSpacing = 1.5.sp
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.2.sp
                         )
                     } else {
                         Text(
-                            text = "LOGIN",
+                            text = "SIGN IN",
                             color = TrackerColors.PureBlack,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.SansSerif,
-                            letterSpacing = 1.5.sp
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.2.sp
                         )
                     }
                 }
@@ -296,5 +363,57 @@ fun LoginScreen(
 
         // Bottom Footer Badge
         FooterBadge()
+    }
+}
+
+// ---------------------------------------------------------------- Clean Checkbox
+
+@Composable
+private fun CleanCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (checked) TrackerColors.PrimaryWhite else TrackerColors.SurfaceInput,
+        animationSpec = tween(durationMillis = 150),
+        label = "checkboxBg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (checked) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorderLight,
+        animationSpec = tween(durationMillis = 150),
+        label = "checkboxBorder"
+    )
+
+    Box(
+        modifier = modifier
+            .size(18.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(4.dp))
+            .clickable { onCheckedChange(!checked) },
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) {
+            Canvas(modifier = Modifier.size(10.dp)) {
+                val w = size.width
+                val h = size.height
+                val strokeW = 1.8.dp.toPx()
+                val checkPath = Path().apply {
+                    moveTo(w * 0.15f, h * 0.52f)
+                    lineTo(w * 0.42f, h * 0.82f)
+                    lineTo(w * 0.88f, h * 0.22f)
+                }
+                drawPath(
+                    path = checkPath,
+                    color = TrackerColors.PureBlack,
+                    style = Stroke(
+                        width = strokeW,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
+                )
+            }
+        }
     }
 }

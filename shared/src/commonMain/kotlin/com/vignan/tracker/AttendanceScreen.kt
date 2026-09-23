@@ -121,7 +121,7 @@ fun AttendanceScreen() {
 
     fun fetchAttendance() {
         if (rollNumber.isBlank() || password.isBlank()) {
-            showValidationDialog = true
+            errorMessage = "Please enter both Registration Number and Password."
             return
         }
 
@@ -291,14 +291,21 @@ fun AttendanceScreen() {
                     MainScreenState.LOGIN -> {
                         LoginScreen(
                             rollNumber = rollNumber,
-                            onRollNumberChange = { rollNumber = it },
+                            onRollNumberChange = {
+                                rollNumber = it
+                                errorMessage = null
+                            },
                             password = password,
-                            onPasswordChange = { password = it },
+                            onPasswordChange = {
+                                password = it
+                                errorMessage = null
+                            },
                             isPasswordVisible = isPasswordVisible,
                             onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
                             rememberMe = rememberMe,
                             onRememberMeChange = { rememberMe = it },
                             isLoading = isLoading,
+                            errorMessage = errorMessage,
                             onSubmit = { fetchAttendance() }
                         )
                     }
