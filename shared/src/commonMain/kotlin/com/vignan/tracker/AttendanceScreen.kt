@@ -244,16 +244,17 @@ fun AttendanceScreen() {
             }
         },
         topBar = {
+            val handleLogout: () -> Unit = {
+                scope.launch { repository.logout() }
+                isSessionActive = false
+                liveAttendanceResponse = null
+                attendanceData = null
+                password = ""
+                errorMessage = null
+            }
             HeaderBar(
                 isLoggedIn = isSessionActive,
-                onLogout = {
-                    scope.launch { repository.logout() }
-                    isSessionActive = false
-                    liveAttendanceResponse = null
-                    attendanceData = null
-                    password = ""
-                    errorMessage = null
-                }
+                onLogout = handleLogout
             )
         }
     ) { paddingValues ->
@@ -316,7 +317,15 @@ fun AttendanceScreen() {
                             liveResponse = liveAttendanceResponse,
                             isRefreshing = isLoading,
                             lastFetchDurationMs = lastFetchDurationMs,
-                            onFetchClick = { fetchAttendance() }
+                            onFetchClick = { fetchAttendance() },
+                            onLogout = {
+                                scope.launch { repository.logout() }
+                                isSessionActive = false
+                                liveAttendanceResponse = null
+                                attendanceData = null
+                                password = ""
+                                errorMessage = null
+                            }
                         )
                     }
                 }

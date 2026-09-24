@@ -47,6 +47,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -61,7 +62,8 @@ import kotlin.math.roundToInt
 
 enum class MainNavTab(val label: String) {
     HOME("HOME"),
-    TIMETABLE("TIMETABLE")
+    TIMETABLE("TIMETABLE"),
+    PROFILE("PROFILE")
 }
 
 @Composable
@@ -70,7 +72,8 @@ fun DashboardScreen(
     liveResponse: LiveAttendanceResponse? = null,
     isRefreshing: Boolean = false,
     lastFetchDurationMs: Long? = null,
-    onFetchClick: () -> Unit = {}
+    onFetchClick: () -> Unit = {},
+    onLogout: () -> Unit = {}
 ) {
     var selectedNavTab by remember { mutableStateOf(MainNavTab.HOME) }
 
@@ -146,6 +149,17 @@ fun DashboardScreen(
                 MainNavTab.TIMETABLE -> {
                     item {
                         TimetableScreen(liveResponse = liveResponse)
+                    }
+                }
+
+                MainNavTab.PROFILE -> {
+                    item {
+                        ProfileScreen(
+                            liveResponse = liveResponse,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onFetchClick,
+                            onLogout = onLogout
+                        )
                     }
                 }
             }
@@ -788,7 +802,7 @@ fun ExpressiveFloatingPillNavBar(
     val tabs = MainNavTab.entries
     val selectedIndex = selectedTab.ordinal
 
-    val tabWidth = 118.dp
+    val tabWidth = 98.dp
     val tabGap = 2.dp
 
     // Spring-physics highlight that glides between tabs
@@ -855,14 +869,14 @@ fun ExpressiveFloatingPillNavBar(
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 NavTabIcon(tab = tab, color = contentColor, scale = iconScale)
-                                Spacer(modifier = Modifier.width(7.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = tab.label,
                                     color = contentColor,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
-                                    letterSpacing = 1.sp,
+                                    letterSpacing = 0.5.sp,
                                     maxLines = 1
                                 )
                             }
@@ -915,6 +929,29 @@ private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
                 drawLine(color, Offset(0f, h * 0.42f), Offset(w, h * 0.42f), strokeW)
                 drawCircle(color, radius = w * 0.1f, center = Offset(w * 0.3f, h * 0.68f))
                 drawLine(color, Offset(w * 0.48f, h * 0.68f), Offset(w * 0.8f, h * 0.68f), strokeW, StrokeCap.Round)
+            }
+
+            MainNavTab.PROFILE -> {
+                // Profile silhouette: head circle + shoulder curve
+                val w = size.width
+                val h = size.height
+                val strokeW = w * 0.09f
+
+                // Head
+                drawCircle(
+                    color = color,
+                    radius = w * 0.22f,
+                    center = Offset(w * 0.5f, h * 0.28f),
+                    style = Stroke(width = strokeW)
+                )
+
+                // Shoulders
+                val path = Path().apply {
+                    moveTo(w * 0.14f, h * 0.90f)
+                    quadraticTo(w * 0.16f, h * 0.62f, w * 0.5f, h * 0.62f)
+                    quadraticTo(w * 0.84f, h * 0.62f, w * 0.86f, h * 0.90f)
+                }
+                drawPath(path = path, color = color, style = Stroke(width = strokeW, cap = StrokeCap.Round))
             }
         }
     }
