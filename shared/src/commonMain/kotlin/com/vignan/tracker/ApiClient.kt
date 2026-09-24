@@ -142,4 +142,14 @@ class ApiClient(
         if (!response.status.isSuccess()) mapError(response)
         return decode(response.bodyAsText())
     }
+
+    /** Student profile only — fast single-endpoint fetch. */
+    suspend fun fetchProfile(creds: CredentialsRequest): ProfileResponse {
+        val response = post(
+            "/api/profile",
+            AppJson.encodeToString(CredentialsRequest.serializer(), creds)
+        )
+        if (!response.status.isSuccess()) mapError(response)
+        return decode(response.bodyAsText())
+    }
 }

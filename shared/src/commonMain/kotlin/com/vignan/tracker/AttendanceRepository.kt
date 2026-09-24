@@ -87,5 +87,15 @@ class AttendanceRepository(
         }
     }
 
+    suspend fun fetchProfile(): Result<ProfileInfo> {
+        val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
+        return try {
+            val response = api.fetchProfile(CredentialsRequest(creds.rollNo, creds.password))
+            Result.success(response.profile)
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun logout() = store.clear()
 }

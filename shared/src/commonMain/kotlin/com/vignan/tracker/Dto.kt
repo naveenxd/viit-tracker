@@ -51,6 +51,99 @@ data class SubjectAttendance(
 )
 
 @Serializable
+data class PersonalDetails(
+    val admissionNo: String = "",
+    val rollNo: String = "",
+    val name: String = "",
+    val course: String = "",
+    val branch: String = "",
+    val semester: String = "",
+    val gender: String = "",
+    val dob: String = "",
+    val nationality: String = "",
+    val religion: String = "",
+    val entranceType: String = "",
+    val rank: String = "",
+    val seatType: String = "",
+    val categoryCaste: String = "",
+    val lastStudied: String = "",
+    val joiningDate: String = "",
+    val mobileNo: String = "",
+    val phoneNo: String = "",
+    val email: String = "",
+    val aadharNo: String = "",
+    val scholarship: String = "",
+    val photoUrl: String = ""
+)
+
+@Serializable
+data class EducationRecord(
+    val qualification: String = "",
+    val board: String = "",
+    val htNo: String = "",
+    val yearOfPass: String = "",
+    val institute: String = "",
+    val maxMarks: String = "",
+    val obtainedMarks: String = "",
+    val gradeLetter: String = "",
+    val gradePoints: String = ""
+)
+
+@Serializable
+data class ParentDetails(
+    val fatherName: String = "",
+    val fatherOccupation: String = "",
+    val fatherMobile: String = "",
+    val motherName: String = "",
+    val motherOccupation: String = "",
+    val motherMobile: String = "",
+    val annualIncome: String = "",
+    val correspondenceAddress: String = "",
+    val permanentAddress: String = ""
+)
+
+@Serializable
+data class FeeItem(
+    val sNo: String = "",
+    val feeName: String = "",
+    val feeAmount: String = "",
+    val concession: String = "",
+    val payable: String = "",
+    val paid: String = "",
+    val recNo: String = "",
+    val recDate: String = "",
+    val due: String = "",
+    val excessPaid: String = "",
+    val refund: String = ""
+)
+
+@Serializable
+data class FeeDetails(
+    val items: List<FeeItem> = emptyList(),
+    val totalPayable: String = "",
+    val totalPaid: String = "",
+    val totalDue: String = "",
+    val balanceText: String = ""
+)
+
+@Serializable
+data class AcademicPerformance(
+    val cgpa: String = "",
+    val credits: String = "",
+    val backlogs: String = "",
+    val achievements: String = "",
+    val paperPresentations: String = ""
+)
+
+@Serializable
+data class ProfileStatus(
+    val backlogs: String = "",
+    val outings: String = "",
+    val counseling: String = "",
+    val disciplinary: String = ""
+)
+
+@Serializable
 data class ProfileInfo(
     val name: String,
     val rollNo: String,
@@ -58,6 +151,17 @@ data class ProfileInfo(
     val semester: String,
     val aggregate: Aggregate,
     val subjects: List<SubjectAttendance>,
+    val personal: PersonalDetails? = null,
+    val education: List<EducationRecord> = emptyList(),
+    val parents: ParentDetails? = null,
+    val performance: AcademicPerformance? = null,
+    val fees: FeeDetails? = null,
+    val status: ProfileStatus? = null
+)
+
+@Serializable
+data class ProfileResponse(
+    val profile: ProfileInfo
 )
 
 @Serializable
