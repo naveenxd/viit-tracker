@@ -520,14 +520,11 @@ private fun TodayPanel(
 ) {
     val entries = liveResponse?.attendance?.today.orEmpty()
 
-    // Pick today's entry by parsing its date; fall back to the most recent one.
+
     val nowMs = System.currentTimeMillis()
-    val todaysEntry = entries.firstOrNull { isSameCalendarDay(parseLooseDate(it.date), nowMs) }
-    val latestEntry = entries
-        .mapNotNull { e -> parseLooseDate(e.date)?.let { e to it } }
-        .maxByOrNull { it.second }?.first
-        ?: entries.lastOrNull()
-    val entry = todaysEntry ?: latestEntry
+    val parsed = entries.map { it to parseLooseDate(it.date) }
+    val entry = parsed.firstOrNull { isSameCalendarDay(it.second, nowMs) }?.first
+        ?: parsed.lastOrNull { it.second == null }?.first
 
     Box(
         modifier = modifier
@@ -555,7 +552,13 @@ private fun TodayPanel(
                     fontSize = 11.sp,
                     fontFamily = FontFamily.SansSerif
                 )
-                entry == null || entry.badges.isEmpty() -> Text(
+                entry == null -> Text(
+                    text = "No attendance recorded for today yet.",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
+                entry.badges.isEmpty() -> Text(
                     text = "No attendance recorded for today.",
                     color = TrackerColors.TextSubtle,
                     fontSize = 11.sp,
