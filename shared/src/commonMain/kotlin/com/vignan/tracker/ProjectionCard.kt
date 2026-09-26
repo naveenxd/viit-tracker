@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,10 +40,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /**
- * "Attendance as per data" projection: for each of the next N days, what the
+ * "Attendance as per data" projection: for today and each of the next N−1 days, what the
  * overall attendance WILL be at the end of that day if scheduled classes are attended,
  * plus the skippable buffer to stay above 75%.
  *
@@ -71,9 +73,63 @@ private fun dayMapIndex(cal: java.util.Calendar): Int = cal.get(java.util.Calend
 private fun scheduledClasses(weekly: Map<Int, List<TTItem>>, mapIdx: Int): Int =
     weekly[mapIdx].orEmpty().sumOf { it.slots.size }
 
+/** "2026-09-22T20:07:57" → minutes-of-day (1207), or null when unusable. */
+private fun parseScrapedMinute(scrapedAt: String?): Int? {
+    if (scrapedAt == null || scrapedAt.length < 16 || scrapedAt.getOrNull(10) != 'T') return null
+    val h = scrapedAt.substring(11, 13).toIntOrNull() ?: return null
+    val m = scrapedAt.substring(14, 16).toIntOrNull() ?: return null
+    if (h !in 0..23 || m !in 0..59) return null
+    return h * 60 + m
+}
+
+/**
+ * Today's row counts only classes still ahead: everything with endMin already
+ * past at scrape time is assumed attended and is already inside the snapshot.
+ * A snapshot scraped on an earlier day cannot tell us which of today's classes
+ * are done, so all of today's classes are counted as still ahead.
+ */
+private fun classesRemainingToday(items: List<TTItem>, scrapedSameDay: Boolean, scrapeMinute: Int?): Int {
+    val total = items.sumOf { it.slots.size }
+    if (!scrapedSameDay || scrapeMinute == null) return total
+    val elapsed = items.sumOf { if (it.endMin <= scrapeMinute) it.slots.size else 0 }
+    return (total - elapsed).coerceIn(0, total)
+}
+
+/** Calendar time → stable "yyyy-MM-dd" key for comparing scrapes to today (local time). */
+private fun dayKey(time: java.util.Date): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(time)
+
+/**
+ * scrapedAt → (local minute-of-day, local "yyyy-MM-dd" it landed on). The
+ * backend stamps it in UTC, so it is parsed as UTC and converted to the
+ * device's wall clock — matching the timetable's clock times. Falls back to
+ * reading the string verbatim (right when the backend sends local time, e.g.
+ * with an explicit +05:30 offset) when it cannot be parsed as UTC.
+ */
+private fun parseScrapedStamp(scrapedAt: String?): Pair<Int, String>? {
+    val raw = scrapedAt?.trim() ?: return null
+    val verbatim = parseScrapedMinute(raw) ?: return null
+    val utcMillis = runCatching {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        format.timeZone = java.util.TimeZone.getTimeZone("UTC")
+        format.isLenient = false
+        format.parse(raw.substringBefore('.').trimEnd('Z'))?.time
+    }.getOrNull()
+    if (utcMillis != null) {
+        val local = java.util.Calendar.getInstance().apply { timeInMillis = utcMillis }
+        val localMinute = local.get(java.util.Calendar.HOUR_OF_DAY) * 60 + local.get(java.util.Calendar.MINUTE)
+        return localMinute to dayKey(local.time)
+    }
+    // Unparseable as UTC (e.g. explicit +05:30 offset — already local): read verbatim.
+    return verbatim to raw.take(10)
+}
+
 /**
  * Builds the attendance projection list for the given number of days.
- * - Row 0 represents the baseline: current end-of-day attendance snapshot directly from data.
+ * - Row 0 is TODAY at end-of-day: the scraped snapshot plus the classes still
+ *   ahead of the scrape — attended, or missed if today is in [absentDates].
+ *   With a snapshot scraped on an earlier day, all of today's classes are
+ *   counted as still ahead (the snapshot then covers only up to that scrape).
  * - Future days (starting tomorrow) project attendance assuming scheduled classes are attended,
  *   or missed if included in [absentDates].
  * - Sundays are present in sequence but marked [isSunday = true] (0 classes, greyed out).
@@ -95,21 +151,50 @@ fun buildAttendanceProjection(
     var held = agg.held
     val rows = mutableListOf<ProjectionRow>()
 
-    // Row 0 — Today's baseline: represents current standing from scraped data (no added classes)
+    // Row 0 — TODAY at end-of-day: snapshot + the classes still ahead of the scrape
     val isTodaySunday = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
     val todayDateText = dateFormat.format(java.util.Date(cal.timeInMillis))
 
-    rows += ProjectionRow(
-        dateMs = cal.timeInMillis,
-        dateText = todayDateText,
-        isSunday = isTodaySunday,
-        classesThatDay = 0,
-        attended = attended,
-        held = held,
-        percentage = if (held > 0) attended * 100.0 / held else 0.0,
-        skippable = skippablePeriods(attended, held),
-        isAbsent = false
-    )
+    if (isTodaySunday) {
+        rows += ProjectionRow(
+            dateMs = cal.timeInMillis,
+            dateText = todayDateText,
+            isSunday = true,
+            classesThatDay = 0,
+            attended = attended,
+            held = held,
+            percentage = if (held > 0) attended * 100.0 / held else 0.0,
+            skippable = skippablePeriods(attended, held),
+            isAbsent = false
+        )
+    } else {
+        val scrape = parseScrapedStamp(live.scrapedAt)
+        val scrapedSameDay = scrape != null && scrape.second == dayKey(cal.time)
+        val todayClasses = classesRemainingToday(
+            weekly[dayMapIndex(cal)].orEmpty(), scrapedSameDay, scrape?.first
+        )
+        val isTodayAbsent = todayDateText in absentDates
+
+        if (isTodayAbsent) {
+            // Absent/Bunked: classes held increases, but attended does not!
+            held += todayClasses
+        } else {
+            attended += todayClasses
+            held += todayClasses
+        }
+
+        rows += ProjectionRow(
+            dateMs = cal.timeInMillis,
+            dateText = todayDateText,
+            isSunday = false,
+            classesThatDay = todayClasses,
+            attended = attended,
+            held = held,
+            percentage = if (held > 0) attended * 100.0 / held else 0.0,
+            skippable = skippablePeriods(attended, held),
+            isAbsent = isTodayAbsent
+        )
+    }
 
     // Future days: iterate starting tomorrow until we reach requested count of days
     while (rows.size < days) {
@@ -172,8 +257,21 @@ fun ProjectionCard(
 ) {
     var range by remember { mutableStateOf(10) }
     var absentDates by remember { mutableStateOf(setOf<String>()) }
+    // Recompute the projection when the calendar day rolls over, so the "today"
+    // row and its remaining classes stay correct without a refetch.
+    var dayStamp by remember { mutableStateOf(dayKey(java.util.Calendar.getInstance().time)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            val now = dayKey(java.util.Calendar.getInstance().time)
+            if (now != dayStamp) {
+                dayStamp = now
+                break
+            }
+        }
+    }
 
-    val rows = remember(liveResponse, range, absentDates) {
+    val rows = remember(liveResponse, range, absentDates, dayStamp) {
         liveResponse?.let { buildAttendanceProjection(it, range, absentDates) } ?: emptyList()
     }
 
@@ -414,9 +512,10 @@ private fun ProjectionLine(
             .clip(RoundedCornerShape(6.dp))
             .then(if (row.isSunday) Modifier.alpha(0.35f) else Modifier)
     ) {
-        // Background reveal ONLY when swiping actively on future days (dragOffset < -8f)
-        // If absent, shows neutral "RESTORE" to prevent ANY green-on-red overlap!
-        if (!row.isSunday && !isToday && dragOffset < -8f) {
+        // Background reveal while swiping on any bunkable day (today or future)
+        // (dragOffset < -8f). If absent, shows neutral "RESTORE" to prevent
+        // ANY green-on-red overlap!
+        if (!row.isSunday && dragOffset < -8f) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
@@ -445,7 +544,8 @@ private fun ProjectionLine(
                 .background(rowBackground)
                 .border(1.dp, rowBorder, RoundedCornerShape(6.dp))
                 .then(
-                    if (!row.isSunday && !isToday) {
+                    // Today and future days are bunkable; Sundays are not.
+                    if (!row.isSunday) {
                         Modifier
                             .pointerInput(row.dateText, row.isAbsent) {
                                 detectHorizontalDragGestures(
