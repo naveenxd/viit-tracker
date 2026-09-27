@@ -51,7 +51,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -326,13 +326,20 @@ private fun HeroTerminalCard(
 }
 
 /**
- * Two side-by-side panels (60:40 + gap) that always render as equal-height
- * cards sized to the TALLER of the two contents — the shorter one stretches
- * via min constraints, so neither card ever clips its content (e.g. the
- * CAN SKIP tile when no attendance is recorded for today).
- * The LEFT panel is measured with unbounded height so content (a FlowRow of
- * chips) fully determines its natural height — FlowRow's intrinsic
- * measurement under-reports and clips rows when used with IntrinsicSize.Min.
+ * Two side-by-side panels (60:40 + gap) that always render at EQUAL height,
+ * whatever their content:
+ *
+ * 1. Both panels are first subcomposed and measured ONCE with unbounded
+ *    height to learn their natural heights.
+ * 2. The row height becomes the taller of the two, capped by the incoming
+ *    max height.
+ * 3. Both panels are subcomposed AGAIN under fresh slot ids and measured
+ *    exactly once with min = max = row height, so the shorter card stretches
+ *    to match the taller one and neither ever clips.
+ *
+ * A Measurable may only be measure()d once per layout pass, and FlowRow
+ * intrinsic heights under-report — hence probe + final subcompositions
+ * instead of a two-pass measure() or IntrinsicSize.Min.
  */
 @Composable
 private fun StatRow(
@@ -340,41 +347,42 @@ private fun StatRow(
     todayContent: @Composable () -> Unit,
     skipsContent: @Composable () -> Unit
 ) {
-    Layout(
-        content = {
-            // NOTE: no wrapper Boxes — Box strips min constraints from its
-            // children by default, which is exactly what broke height matching.
-            todayContent()
-            skipsContent()
-        }
-    ) { measurables, constraints ->
+    SubcomposeLayout(modifier) { constraints ->
         val gapPx = 10.dp.roundToPx()
         val usable = constraints.maxWidth - gapPx
         val leftW = (usable * 0.6f).roundToInt()
         val rightW = usable - leftW
 
-        val leftPlaceable = measurables[0].measure(
+        // Pass 1 — probe compositions: natural heights from a real measure.
+        val leftNatural = subcompose("probe-left") { todayContent() }.first().measure(
             Constraints(minWidth = leftW, maxWidth = leftW)
+        ).height
+        val rightNatural = subcompose("probe-right") { skipsContent() }.first().measure(
+            Constraints(minWidth = rightW, maxWidth = rightW)
+        ).height
+
+        val rowHeight = maxOf(leftNatural, rightNatural)
+            .let { if (constraints.hasBoundedHeight) it.coerceAtMost(constraints.maxHeight) else it }
+
+        // Pass 2 — final compositions: fixed height (min = max = rowHeight),
+        // never any infinite constraint, and each fresh Measurable is measured
+        // exactly once.
+        val leftPlaceable = subcompose("final-left") { todayContent() }.first().measure(
+            Constraints(
+                minWidth = leftW,
+                maxWidth = leftW,
+                minHeight = rowHeight,
+                maxHeight = rowHeight
+            )
         )
-        // Right panel matches the left height as a FLOOR, never a ceiling —
-        // it may grow taller (e.g. CAN SKIP tile when today's list is empty),
-        // and the row then sizes to the taller of the two.
-        val rightMinH = if (constraints.hasBoundedHeight) {
-            minOf(leftPlaceable.height, constraints.maxHeight)
-        } else {
-            leftPlaceable.height
-        }
-        val rightPlaceable = measurables[1].measure(
+        val rightPlaceable = subcompose("final-right") { skipsContent() }.first().measure(
             Constraints(
                 minWidth = rightW,
                 maxWidth = rightW,
-                minHeight = rightMinH,
-                maxHeight = constraints.maxHeight
+                minHeight = rowHeight,
+                maxHeight = rowHeight
             )
         )
-
-        val rowHeight = maxOf(leftPlaceable.height, rightPlaceable.height)
-            .coerceAtMost(constraints.maxHeight)
 
         layout(constraints.maxWidth, rowHeight) {
             leftPlaceable.placeRelative(0, 0)
@@ -392,8 +400,8 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
     val accentSubtle = if (isSafe) TrackerColors.SafeEmeraldSubtle else TrackerColors.DangerRoseSubtle
     val waiting = !hasData || skips == null
 
-    // CenterStart keeps the content vertically centered whenever this panel
-    // is stretched (via min constraints) taller than its natural content.
+    // SpaceBetween keeps eyebrow / value / context spread out whenever this
+    // panel is stretched (via minHeight) taller than its natural content.
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
@@ -543,8 +551,9 @@ private fun TodayPanel(
     val entry = parsed.firstOrNull { isSameCalendarDay(it.second, nowMs) }?.first
         ?: parsed.lastOrNull { it.second == null }?.first
 
-    // CenterStart vertically centers the content whenever this panel is
-    // stretched (via min constraints) taller than its natural content.
+    // fillMaxHeight: when StatRow stretches this card to its neighbour's
+    // height, the title stays pinned to the top and the status sits at the
+    // bottom instead of everything clumping in the middle.
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
@@ -553,7 +562,7 @@ private fun TodayPanel(
             .padding(12.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Column(verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxHeight()) {
             Text(
                 text = "Today attendance status",
                 color = TrackerColors.TextPrimary,
@@ -563,7 +572,7 @@ private fun TodayPanel(
                 maxLines = 1
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
             when {
                 !hasData -> Text(
