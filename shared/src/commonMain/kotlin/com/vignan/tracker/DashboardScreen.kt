@@ -326,10 +326,13 @@ private fun HeroTerminalCard(
 }
 
 /**
- * Two side-by-side panels (60:40 + gap) whose heights always match.
+ * Two side-by-side panels (60:40 + gap) that always render as equal-height
+ * cards sized to the TALLER of the two contents — the shorter one stretches
+ * via min constraints, so neither card ever clips its content (e.g. the
+ * CAN SKIP tile when no attendance is recorded for today).
  * The LEFT panel is measured with unbounded height so content (a FlowRow of
- * chips) fully determines the row height — FlowRow's intrinsic measurement
- * under-reports and clips rows when used with IntrinsicSize.Min.
+ * chips) fully determines its natural height — FlowRow's intrinsic
+ * measurement under-reports and clips rows when used with IntrinsicSize.Min.
  */
 @Composable
 private fun StatRow(
@@ -353,16 +356,27 @@ private fun StatRow(
         val leftPlaceable = measurables[0].measure(
             Constraints(minWidth = leftW, maxWidth = leftW)
         )
+        // Right panel matches the left height as a FLOOR, never a ceiling —
+        // it may grow taller (e.g. CAN SKIP tile when today's list is empty),
+        // and the row then sizes to the taller of the two.
+        val rightMinH = if (constraints.hasBoundedHeight) {
+            minOf(leftPlaceable.height, constraints.maxHeight)
+        } else {
+            leftPlaceable.height
+        }
         val rightPlaceable = measurables[1].measure(
             Constraints(
                 minWidth = rightW,
                 maxWidth = rightW,
-                minHeight = leftPlaceable.height,
-                maxHeight = leftPlaceable.height
+                minHeight = rightMinH,
+                maxHeight = constraints.maxHeight
             )
         )
 
-        layout(constraints.maxWidth, leftPlaceable.height) {
+        val rowHeight = maxOf(leftPlaceable.height, rightPlaceable.height)
+            .coerceAtMost(constraints.maxHeight)
+
+        layout(constraints.maxWidth, rowHeight) {
             leftPlaceable.placeRelative(0, 0)
             rightPlaceable.placeRelative(leftW + gapPx, 0)
         }
@@ -378,12 +392,15 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
     val accentSubtle = if (isSafe) TrackerColors.SafeEmeraldSubtle else TrackerColors.DangerRoseSubtle
     val waiting = !hasData || skips == null
 
+    // CenterStart keeps the content vertically centered whenever this panel
+    // is stretched (via min constraints) taller than its natural content.
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(14.dp)
+            .padding(14.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
         Column(
             modifier = Modifier.fillMaxHeight(),
@@ -526,12 +543,15 @@ private fun TodayPanel(
     val entry = parsed.firstOrNull { isSameCalendarDay(it.second, nowMs) }?.first
         ?: parsed.lastOrNull { it.second == null }?.first
 
+    // CenterStart vertically centers the content whenever this panel is
+    // stretched (via min constraints) taller than its natural content.
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(12.dp)
+            .padding(12.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
         Column(verticalArrangement = Arrangement.Center) {
             Text(
