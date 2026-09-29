@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface_dark"
+    android:orientation="vertical"
+    android:padding="16dp">
+    
+    <!-- Student Info Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+        
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            
+            <TextView
+                android:id="@+id/widget_student_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="STUDENT NAME"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+                
+            <TextView
+                android:id="@+id/widget_roll_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Roll No"
+                android:textColor="@color/text_muted"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+        
+        <!-- Status Indicator -->
+        <TextView
+            android:id="@+id/widget_status_indicator"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:background="@drawable/status_indicator_safe"
+            android:gravity="center" />
+    </LinearLayout>
+    
+    <!-- Attendance Percentage -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+        
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            
+            <TextView
+                android:id="@+id/widget_percentage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="85.5%"
+                android:textColor="@color/safe_emerald"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+                
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ATTENDANCE"
+                android:textColor="@color/text_muted"
+                android:textSize="8sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1" />
+        </LinearLayout>
+        
+        <!-- Classes -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end">
+            
+            <TextView
+                android:id="@+id/widget_classes"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="45 / 52"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+                
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CLASSES"
+                android:textColor="@color/text_muted"
+                android:textSize="8sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+        </LinearLayout>
+    </LinearLayout>
+    
+    <!-- Bottom Row: Skip Status & Today -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        
+        <!-- Skip Status -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            
+            <TextView
+                android:id="@+id/widget_skip_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CAN SKIP"
+                android:textColor="@color/safe_emerald"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:padding="4dp"
+                android:background="@drawable/status_background_safe" />
+                
+            <TextView
+                android:id="@+id/widget_skip_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3 periods"
+                android:textColor="@color/text_muted"
+                android:textSize="8sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+        
+        <!-- Today Status -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end">
+            
+            <TextView
+                android:id="@+id/widget_today_status"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:text="✓"
+                android:textColor="@color/safe_emerald"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/today_status_background_safe" />
+                
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TODAY"
+                android:textColor="@color/text_muted"
+                android:textSize="8sp"
+                android:textStyle="bold"
+                android:layout_marginTop="4dp"
+                android:letterSpacing="0.08" />
+        </LinearLayout>
+    </LinearLayout>
+    
+</LinearLayout>
