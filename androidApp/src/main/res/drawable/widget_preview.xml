@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="120dp"
+    android:viewportWidth="250"
+    android:viewportHeight="120">
+    
+    <!-- Background -->
+    <path
+        android:fillColor="@color/surface_dark"
+        android:pathData="M0,0h250v120h-250z" />
+    
+    <!-- Widget border -->
+    <path
+        android:strokeColor="@color/hairline_border"
+        android:strokeWidth="1"
+        android:pathData="M5,5h240v110h-240z" />
+    
+    <!-- Sample content: Student name -->
+    <path
+        android:fillColor="@color/text_primary"
+        android:pathData="M20,20h80v8h-80z" />
+    
+    <!-- Sample content: Percentage -->
+    <path
+        android:fillColor="@color/safe_emerald"
+        android:pathData="M20,40h60v20h-60z" />
+    
+    <!-- Sample content: Skip status -->
+    <path
+        android:fillColor="@color/safe_emerald"
+        android:pathData="M20,80h40v8h-40z" />
+    
+    <!-- Sample content: Today indicator -->
+    <path
+        android:fillColor="@color/safe_emerald"
+        android:pathData="M200,80h20v20h-20z" />
+        
+</vector>
