@@ -1,3 +1,22 @@
 <resources>
     <string name="app_name">viit-tracker</string>
+    
+    <!-- Widget strings -->
+    <string name="widget_title">Attendance Tracker</string>
+    <string name="widget_description">Track your attendance percentage, can-skip periods, and today\'s status</string>
+    <string name="widget_description_small">Compact attendance tracker widget</string>
+    
+    <string name="widget_loading">Loading…</string>
+    <string name="widget_syncing">Syncing…</string>
+    <string name="widget_no_data">No data available</string>
+    
+    <string name="widget_tap_to_refresh">Tap to refresh</string>
+    <string name="widget_tap_to_open">Tap to open app</string>
+    
+    <!-- Status labels -->
+    <string name="status_safe">SAFE</string>
+    <string name="status_critical">CRITICAL</string>
+    <string name="status_syncing">SYNCING</string>
+    <string name="status_can_skip">CAN SKIP</string>
+    <string name="status_attend">ATTEND</string>
 </resources>
