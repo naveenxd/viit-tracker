@@ -62,6 +62,7 @@ import kotlin.math.roundToInt
 
 enum class MainNavTab(val label: String) {
     HOME("HOME"),
+    REPORT("REPORT"),
     TIMETABLE("TIMETABLE"),
     PROFILE("PROFILE")
 }
@@ -143,6 +144,12 @@ fun DashboardScreen(
                             liveResponse = liveResponse,
                             hasData = hasData
                         )
+                    }
+                }
+
+                MainNavTab.REPORT -> {
+                    item {
+                        ReportScreen()
                     }
                 }
 
@@ -834,7 +841,7 @@ fun ExpressiveFloatingPillNavBar(
     val tabs = MainNavTab.entries
     val selectedIndex = selectedTab.ordinal
 
-    val tabWidth = 98.dp
+    val tabWidth = 78.dp
     val tabGap = 2.dp
 
     // Spring-physics highlight that glides between tabs
@@ -940,6 +947,27 @@ private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
                 drawRoundRect(color, Offset(cell + gap, 0f), Size(cell, cell), r)
                 drawRoundRect(color, Offset(0f, cell + gap), Size(cell, cell), r)
                 drawRoundRect(color, Offset(cell + gap, cell + gap), Size(cell, cell), r)
+            }
+
+            MainNavTab.REPORT -> {
+                // Report sheet: document with title bar and list lines
+                val w = size.width
+                val h = size.height
+                val strokeW = w * 0.085f
+                val bodyTop = h * 0.16f
+
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(0f, bodyTop),
+                    size = Size(w, h - bodyTop),
+                    cornerRadius = CornerRadius(w * 0.2f, w * 0.2f),
+                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                )
+                // Title band
+                drawLine(color, Offset(w * 0.24f, h * 0.34f), Offset(w * 0.76f, h * 0.34f), strokeW, StrokeCap.Round)
+                // List lines
+                drawLine(color, Offset(w * 0.24f, h * 0.54f), Offset(w * 0.76f, h * 0.54f), strokeW * 0.8f, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.24f, h * 0.72f), Offset(w * 0.6f, h * 0.72f), strokeW * 0.8f, StrokeCap.Round)
             }
 
             MainNavTab.TIMETABLE -> {
