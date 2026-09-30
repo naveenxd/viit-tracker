@@ -127,10 +127,13 @@
     </LinearLayout>
 
     <!-- ── Divider ────────────────────────────────────────────────────────── -->
-    <View
+    <!-- NOTE: must be a TextView, not a plain <View> — View is not in the
+         RemoteViews allow-list and the whole widget fails to inflate. -->
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginBottom="8dp"
+        android:text=""
         android:background="@color/hairline_border" />
 
     <!-- ── Today row: subject chips + refresh affordance ──────────────────── -->
