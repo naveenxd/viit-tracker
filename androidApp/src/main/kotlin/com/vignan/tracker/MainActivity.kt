@@ -9,10 +9,12 @@ import androidx.compose.ui.tooling.preview.Preview
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Set before super.onCreate() so any code path that touches the credential
+        // store during activity init already sees a valid context.
+        AppContextProvider.context = applicationContext
+
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        AppContextProvider.context = applicationContext
 
         setContent {
             App()
