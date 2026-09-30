@@ -37,6 +37,12 @@ dependencies {
     // Kotlinx Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
+    // Coroutines (Main dispatcher for widget toasts)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Encrypted credential storage (widget reads the shared credential store)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Lifecycle & ViewModel for Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
 }
