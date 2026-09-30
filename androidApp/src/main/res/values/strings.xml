@@ -3,16 +3,8 @@
     
     <!-- Widget strings -->
     <string name="widget_title">Attendance Tracker</string>
-    <string name="widget_description">Track your attendance percentage, can-skip periods, and today\'s status</string>
-    <string name="widget_description_small">Compact attendance tracker widget</string>
-    
-    <string name="widget_loading">Loading…</string>
-    <string name="widget_syncing">Syncing…</string>
-    <string name="widget_no_data">No data available</string>
-    
-    <string name="widget_tap_to_refresh">Tap to refresh</string>
-    <string name="widget_tap_to_open">Tap to open app</string>
-    
+    <string name="widget_description">Attendance percentage, can-skip periods, and today\'s per-subject status — tap to refresh</string>
+
     <!-- Status labels -->
     <string name="status_safe">SAFE</string>
     <string name="status_critical">CRITICAL</string>
