@@ -133,6 +133,22 @@ class ApiClient(
         if (!response.status.isSuccess()) mapError(response)
     }
 
+    /** Portal ATTENDANCE REPORT (ShowAttendance) for an optional date range. */
+    suspend fun attendanceReport(creds: CredentialsRequest, fromDate: String? = null, toDate: String? = null): AttendanceReportResponse {
+        val body = AppJson.encodeToString(
+            AttendanceReportRequest.serializer(),
+            AttendanceReportRequest(
+                rollNo = creds.rollNo,
+                password = creds.password,
+                fromDate = fromDate?.takeIf { it.isNotBlank() },
+                toDate = toDate?.takeIf { it.isNotBlank() }
+            )
+        )
+        val response = post("/api/attendance/report", body)
+        if (!response.status.isSuccess()) mapError(response)
+        return decode(response.bodyAsText())
+    }
+
     /** Bunk simulator — no credentials needed. */
     suspend fun simulateBunk(request: SimulateBunkRequest): SimulateBunkResponse {
         val response = post(
