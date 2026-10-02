@@ -183,7 +183,7 @@ fun Widget4x2(
                 // Classes attended/conducted
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = if (hasData) "${data?.totalAttended ?: 0} / ${data?.totalConducted ?: 0}" else "— / —",
+                        text = if (hasData) "${data.totalAttended} / ${data.totalConducted}" else "— / —",
                         color = if (hasData) TrackerColors.TextPrimary else TrackerColors.TextMuted,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -230,7 +230,7 @@ fun Widget4x2(
                             Text(
                                 text = when {
                                     !hasData -> "SYNCING"
-                                    data?.safeSkips?.status.equals("Safe", ignoreCase = true) -> "CAN SKIP"
+                                    data.safeSkips?.status.equals("Safe", ignoreCase = true) -> "CAN SKIP"
                                     else -> "ATTEND"
                                 },
                                 color = if (!hasData) TrackerColors.TextMuted else accent,
@@ -245,8 +245,8 @@ fun Widget4x2(
                     Text(
                         text = when {
                             !hasData -> "Loading..."
-                            data?.safeSkips?.status.equals("Safe", ignoreCase = true) -> "${data?.safeSkips?.periods ?: 0} periods"
-                            else -> "Need ${data?.safeSkips?.classesNeededToRecover ?: 0}"
+                            data.safeSkips?.status.equals("Safe", ignoreCase = true) -> "${data.safeSkips?.periods ?: 0} periods"
+                            else -> "Need ${data.safeSkips?.classesNeededToRecover ?: 0}"
                         },
                         color = TrackerColors.TextMuted,
                         fontSize = 8.sp,
