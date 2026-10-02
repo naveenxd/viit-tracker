@@ -1,10 +1,15 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -54,6 +59,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -201,133 +207,130 @@ private fun HeroTerminalCard(
         else -> TrackerColors.DangerRose
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(16.dp)
+            .padding(top = 8.dp, bottom = 4.dp)
     ) {
-        Column {
-            // Identity: name + status pill
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = studentName.ifBlank { "STUDENT" }.uppercase(),
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.SansSerif,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                StatusPill(
-                    hasData = hasData,
-                    overallPercentage = overallPercentage,
-                    statusColor = statusColor
-                )
-            }
-
-            // Roll • branch • semester
-            Spacer(modifier = Modifier.height(3.dp))
+        // Identity line
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = listOfNotNull(
-                    rollNumber.takeIf { it.isNotBlank() },
-                    branch.takeIf { it.isNotBlank() },
-                    semester.takeIf { it.isNotBlank() }
-                ).joinToString("  •  ").ifBlank { "—" },
+                text = studentName.ifBlank { "Student" }.uppercase(),
                 color = TrackerColors.TextMuted,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
+                letterSpacing = 2.sp,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
+            StatusPill(
+                hasData = hasData,
+                overallPercentage = overallPercentage,
+                statusColor = statusColor
+            )
+        }
 
-            Spacer(modifier = Modifier.height(14.dp))
+        // Meta: Roll • Branch • Semester
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = listOfNotNull(
+                rollNumber.takeIf { it.isNotBlank() },
+                branch.takeIf { it.isNotBlank() },
+                semester.takeIf { it.isNotBlank() }
+            ).joinToString("  ·  ").ifBlank { "—" },
+            color = TrackerColors.TextSubtle,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
 
-            // Percentage + attended/conducted
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    if (hasData) {
-                        val pctText = formatPercentage(overallPercentage)
-                        val intPart = pctText.substringBefore('.')
-                        val fracPart = if ('.' in pctText) "." + pctText.substringAfter('.') else null
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Big percentage number
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                if (hasData) {
+                    val pctText = formatPercentage(overallPercentage)
+                    val intPart = pctText.substringBefore('.')
+                    val fracPart = if ('.' in pctText) "." + pctText.substringAfter('.') else null
+                    Text(
+                        text = intPart,
+                        color = TrackerColors.TextPrimary,
+                        fontSize = 52.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 52.sp
+                    )
+                    if (fracPart != null) {
                         Text(
-                            text = intPart,
-                            color = TrackerColors.TextPrimary,
-                            fontSize = 42.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        if (fracPart != null) {
-                            Text(
-                                text = fracPart,
-                                color = statusColor,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = "—",
-                            color = TrackerColors.TextMuted,
-                            fontSize = 42.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace
+                            text = fracPart,
+                            color = statusColor,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(bottom = 6.dp)
                         )
                     }
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
+                } else {
                     Text(
-                        text = if (hasData) "$totalAttended / $totalConducted" else "— / —",
-                        color = if (hasData) TrackerColors.TextPrimary else TrackerColors.TextMuted,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "ATTENDED CLASSES",
+                        text = "—",
                         color = TrackerColors.TextMuted,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 52.sp,
+                        fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.2.sp
+                        lineHeight = 52.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Progress track
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .clip(CircleShape)
-                    .background(TrackerColors.HairlineBorder)
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth((overallPercentage / 100.0).toFloat().coerceIn(0f, 1f))
-                        .height(2.dp)
-                        .clip(CircleShape)
-                        .background(statusColor)
+                Text(
+                    text = if (hasData) "$totalAttended / $totalConducted" else "— / —",
+                    color = if (hasData) TrackerColors.TextSecondary else TrackerColors.TextSubtle,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "classes attended",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.SansSerif
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Progress bar — subtle 1px track
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .clip(CircleShape)
+                .background(TrackerColors.HairlineBorderLight)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth((overallPercentage / 100.0).toFloat().coerceIn(0f, 1f))
+                    .height(1.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
         }
     }
 }
@@ -404,16 +407,13 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
     val skips = liveResponse?.intelligence?.safeSkips
     val isSafe = skips?.status?.equals("Safe", ignoreCase = true) ?: true
     val accent = if (isSafe) TrackerColors.SafeEmerald else TrackerColors.DangerRose
-    val accentSubtle = if (isSafe) TrackerColors.SafeEmeraldSubtle else TrackerColors.DangerRoseSubtle
     val waiting = !hasData || skips == null
 
-    // SpaceBetween keeps eyebrow / value / context spread out whenever this
-    // panel is stretched (via minHeight) taller than its natural content.
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
             .padding(14.dp),
         contentAlignment = Alignment.CenterStart
     ) {
@@ -421,49 +421,28 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
             modifier = Modifier.fillMaxHeight(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Status Eyebrow Pill
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Status label
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(if (waiting) TrackerColors.SurfaceElevated else accentSubtle)
-                        .border(
-                            1.dp,
-                            if (waiting) TrackerColors.HairlineBorder else accent.copy(alpha = 0.35f),
-                            RoundedCornerShape(5.dp)
-                        )
-                        .padding(horizontal = 7.dp, vertical = 3.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(if (waiting) TrackerColors.TextMuted else accent)
-                        )
-                        Text(
-                            text = when {
-                                waiting -> "SYNCING"
-                                isSafe -> "CAN SKIP"
-                                else -> "ATTEND"
-                            },
-                            color = if (waiting) TrackerColors.TextMuted else accent,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 0.8.sp
-                        )
-                    }
-                }
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (waiting) TrackerColors.TextSubtle else accent)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = when {
+                        waiting -> "syncing"
+                        isSafe -> "can skip"
+                        else -> "must attend"
+                    },
+                    color = if (waiting) TrackerColors.TextSubtle else accent,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
             }
 
-            // Stat Value + Unit
+            // Big number
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.fillMaxWidth()
@@ -475,28 +454,27 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
                         else -> "${skips.classesNeededToRecover}"
                     },
                     color = if (waiting) TrackerColors.TextMuted else TrackerColors.TextPrimary,
-                    fontSize = 32.sp,
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = (-0.5).sp
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = if (isSafe || waiting) "periods" else "classes",
                     color = TrackerColors.TextSecondary,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier.padding(bottom = 5.dp)
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
 
-            // Context Subtitle
+            // Context
             Text(
                 text = when {
                     waiting -> "Snapshot pending"
                     isSafe -> "≈ ${skips.days} days buffer"
-                    else -> "Needed to reach 75%"
+                    else -> "To reach 75%"
                 },
                 color = TrackerColors.TextMuted,
                 fontSize = 10.sp,
@@ -510,34 +488,24 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
 
 @Composable
 private fun StatusPill(hasData: Boolean, overallPercentage: Double, statusColor: Color) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(statusColor.copy(alpha = 0.12f))
-            .border(1.dp, statusColor.copy(alpha = 0.4f), CircleShape)
-            .padding(horizontal = 9.dp, vertical = 4.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(statusColor)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = when {
-                    !hasData -> "SYNCING"
-                    overallPercentage >= 75.0 -> "SAFE ZONE"
-                    else -> "CRITICAL"
-                },
-                color = statusColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp
-            )
-        }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .clip(CircleShape)
+                .background(statusColor)
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = when {
+                !hasData -> "syncing"
+                overallPercentage >= 75.0 -> "safe"
+                else -> "critical"
+            },
+            color = statusColor,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.SansSerif
+        )
     }
 }
 
@@ -563,10 +531,10 @@ private fun TodayPanel(
     // bottom instead of everything clumping in the middle.
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(12.dp),
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .padding(14.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Column(modifier = Modifier.fillMaxHeight()) {
@@ -667,82 +635,77 @@ private fun FetchAttendanceButton(
     hasData: Boolean,
     onClick: () -> Unit
 ) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
             .clickable(enabled = !isLoading) { onClick() }
-            .padding(horizontal = 14.dp, vertical = 9.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(11.dp),
-                    color = TrackerColors.TextMuted,
-                    strokeWidth = 1.5.dp
-                )
-                Spacer(modifier = Modifier.width(7.dp))
-                Text(
-                    text = "FETCHING…",
-                    color = TrackerColors.TextSecondary,
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                color = TrackerColors.TextMuted,
+                strokeWidth = 1.5.dp
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Fetching…",
+                color = TrackerColors.TextMuted,
+                fontSize = 13.sp,
+                fontFamily = FontFamily.SansSerif
+            )
+        } else {
+            Text(
+                text = "↻",
+                color = TrackerColors.TextSubtle,
+                fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Refresh attendance",
+                color = TrackerColors.TextSecondary,
+                fontSize = 13.sp,
+                fontFamily = FontFamily.SansSerif
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Column(horizontalAlignment = Alignment.End) {
+            val durationText = lastFetchDurationMs?.let { formatResponseTime(it) }
+            when {
+                isLoading -> Text(
+                    text = "—",
+                    color = TrackerColors.TextSubtle,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
+                    fontFamily = FontFamily.Monospace
                 )
-            } else {
-                Text(
-                    text = "↻  ",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = "FETCH ATTENDANCE",
-                    color = TrackerColors.TextSecondary,
+                durationText != null -> Text(
+                    text = "$durationText ⚡",
+                    color = TrackerColors.SafeEmerald,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = FontFamily.Monospace
+                )
+                hasData -> Text(
+                    text = "cached",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
                 )
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Right-aligned status: response time on top, last fetched below
-            Column(horizontalAlignment = Alignment.End) {
-                val durationText = lastFetchDurationMs?.let { formatResponseTime(it) }
-                when {
-                    isLoading -> Text(
-                        text = "— sec",
-                        color = TrackerColors.TextSubtle,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    durationText != null -> Text(
-                        text = "$durationText ⚡",
-                        color = TrackerColors.SafeEmerald,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    hasData -> Text(
-                        text = "cached",
-                        color = TrackerColors.TextSubtle,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                if (!isLoading) {
-                    Text(
-                        text = "fetched ${formatFetchedAt(scrapedAt)}",
-                        color = TrackerColors.TextSubtle,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1
-                    )
-                }
+            if (!isLoading) {
+                Text(
+                    text = formatFetchedAt(scrapedAt),
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -830,6 +793,103 @@ private fun isSameCalendarDay(aMs: Long?, bMs: Long): Boolean {
             a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
 }
 
+// ---------------------------------------------------------------- subjects
+
+@Composable
+private fun SubjectsListCard(subjects: List<UiSubjectAttendance>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "SUBJECTS",
+                color = TrackerColors.TextMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = "${subjects.size} registered",
+                color = TrackerColors.TextSubtle,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        subjects.forEachIndexed { index, subject ->
+            val statusColor = when {
+                subject.percentage >= 80.0 -> TrackerColors.SafeEmerald
+                subject.percentage >= 75.0 -> TrackerColors.WarningAmber
+                else -> TrackerColors.DangerRose
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = subject.name,
+                        color = TrackerColors.TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.SansSerif,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "${subject.attended}/${subject.conducted}",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = formatPercentage(subject.percentage),
+                    color = statusColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.width(52.dp),
+                    textAlign = TextAlign.End
+                )
+            }
+
+            if (index != subjects.lastIndex) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(TrackerColors.HairlineBorder)
+                )
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------- nav bar
 
 @Composable
@@ -841,13 +901,13 @@ fun ExpressiveFloatingPillNavBar(
     val tabs = MainNavTab.entries
     val selectedIndex = selectedTab.ordinal
 
-    val tabWidth = 78.dp
+    val tabWidth = 80.dp
     val tabGap = 2.dp
 
-    // Spring-physics highlight that glides between tabs
+    // Smooth physics highlight that glides between tabs
     val indicatorOffset by animateDpAsState(
         targetValue = (tabWidth + tabGap) * selectedIndex,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 420f),
+        animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
         label = "navIndicatorOffset"
     )
 
@@ -855,21 +915,21 @@ fun ExpressiveFloatingPillNavBar(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(bottom = 12.dp),
+            .padding(bottom = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             shape = CircleShape,
             color = TrackerColors.SurfaceDark,
-            shadowElevation = 12.dp,
+            shadowElevation = 8.dp,
             border = BorderStroke(1.dp, TrackerColors.HairlineBorder)
         ) {
-            Box(modifier = Modifier.padding(5.dp)) {
-                // Sliding highlight capsule behind the tabs
+            Box(modifier = Modifier.padding(4.dp)) {
+                // Sliding highlight capsule that physically glides across the bar
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffset)
-                        .size(width = tabWidth, height = 40.dp)
+                        .size(width = tabWidth, height = 38.dp)
                         .clip(CircleShape)
                         .background(TrackerColors.SurfaceElevated)
                         .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
@@ -883,19 +943,19 @@ fun ExpressiveFloatingPillNavBar(
                         val isSelected = tab == selectedTab
                         val contentColor by animateColorAsState(
                             targetValue = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
-                            animationSpec = tween(220),
+                            animationSpec = tween(180),
                             label = "navTabColor-${tab.name}"
                         )
                         val iconScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1f else 0.92f,
-                            animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
+                            targetValue = if (isSelected) 1f else 0.94f,
+                            animationSpec = spring(dampingRatio = 0.88f, stiffness = 450f),
                             label = "navIconScale-${tab.name}"
                         )
 
                         Box(
                             modifier = Modifier
                                 .width(tabWidth)
-                                .height(40.dp)
+                                .height(38.dp)
                                 .clip(CircleShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
@@ -908,16 +968,35 @@ fun ExpressiveFloatingPillNavBar(
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 NavTabIcon(tab = tab, color = contentColor, scale = iconScale)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = tab.label,
-                                    color = contentColor,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    letterSpacing = 0.5.sp,
-                                    maxLines = 1
-                                )
+                                AnimatedVisibility(
+                                    visible = isSelected,
+                                    enter = fadeIn(
+                                        animationSpec = tween(160, delayMillis = 30)
+                                    ) + expandHorizontally(
+                                        animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+                                        expandFrom = Alignment.Start
+                                    ),
+                                    exit = fadeOut(
+                                        animationSpec = tween(90)
+                                    ) + shrinkHorizontally(
+                                        animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+                                        shrinkTowards = Alignment.Start
+                                    )
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = tab.label,
+                                            color = contentColor,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = FontFamily.SansSerif,
+                                            letterSpacing = 0.3.sp,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1024,7 +1103,7 @@ fun HeaderBar(
     isLoggedIn: Boolean,
     onLogout: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(TrackerColors.PureBlack)
@@ -1033,80 +1112,41 @@ fun HeaderBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(TrackerColors.PrimaryWhite)
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = "VIIT",
-                        color = TrackerColors.PureBlack,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.5.sp
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
+            // Wordmark
+            Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = "Attendance Tracker",
+                    text = "VIIT",
                     color = TrackerColors.TextPrimary,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 2.sp
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "tracker",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.SansSerif,
-                    letterSpacing = 0.5.sp
+                    modifier = Modifier.padding(bottom = 1.dp)
                 )
             }
 
             if (isLoggedIn) {
-                Box(
+                Text(
+                    text = "Sign out",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.SansSerif,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(TrackerColors.SurfaceDark)
-                        .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(6.dp))
                         .clickable { onLogout() }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "LOGOUT",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
-                    )
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(TrackerColors.SafeEmerald)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "ONLINE",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.2.sp
-                    )
-                }
+                        .padding(vertical = 4.dp, horizontal = 2.dp)
+                )
             }
         }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(TrackerColors.HairlineBorder)
-        )
     }
 }

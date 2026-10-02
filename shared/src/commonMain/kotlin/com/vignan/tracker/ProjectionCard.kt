@@ -277,10 +277,11 @@ fun ProjectionCard(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-            .padding(14.dp)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .padding(16.dp)
     ) {
         Column {
             // Header: Title & Subtitle + Bunk Reset / Range Toggle
@@ -292,8 +293,8 @@ fun ProjectionCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "ATTENDANCE PROJECTION",
-                        color = TrackerColors.TextPrimary,
-                        fontSize = 11.sp,
+                        color = TrackerColors.TextMuted,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = 1.sp
@@ -301,12 +302,12 @@ fun ProjectionCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (absentDates.isNotEmpty()) {
-                            "Simulating ${absentDates.size} day(s) absent • Tap or swipe to toggle"
+                            "${absentDates.size} day(s) absent • Tap to toggle"
                         } else {
-                            "Daily forecast • Tap or swipe to simulate absence"
+                            "Daily forecast • Tap to simulate absence"
                         },
-                        color = if (absentDates.isNotEmpty()) TrackerColors.DangerRose else TrackerColors.TextMuted,
-                        fontSize = 10.sp,
+                        color = if (absentDates.isNotEmpty()) TrackerColors.DangerRose else TrackerColors.TextSubtle,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.SansSerif,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -317,28 +318,27 @@ fun ProjectionCard(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (absentDates.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(5.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(TrackerColors.DangerRoseSubtle)
-                                .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.4f), RoundedCornerShape(5.dp))
                                 .clickable { absentDates = emptySet() }
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "RESET",
                                 color = TrackerColors.DangerRose,
-                                fontSize = 9.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         PROJECTION_RANGES.forEach { r ->
                             RangeChip(label = "${r}D", selected = range == r, onClick = { range = r })
                         }
@@ -346,14 +346,14 @@ fun ProjectionCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
                     .background(TrackerColors.HairlineBorder)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             when {
                 !hasData -> Text(
@@ -449,21 +449,21 @@ fun ProjectionCard(
 private fun RangeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .background(if (selected) TrackerColors.PrimaryWhite else TrackerColors.SurfaceInput)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (selected) TrackerColors.SurfaceElevated else Color.Transparent)
             .border(
                 1.dp,
-                if (selected) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder,
-                RoundedCornerShape(5.dp)
+                if (selected) TrackerColors.HairlineBorderLight else Color.Transparent,
+                RoundedCornerShape(6.dp)
             )
             .clickable { onClick() }
-            .padding(horizontal = 7.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
             text = label,
-            color = if (selected) TrackerColors.PureBlack else TrackerColors.TextMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
+            color = if (selected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             fontFamily = FontFamily.Monospace
         )
     }
@@ -482,26 +482,23 @@ private fun ProjectionLine(
         label = "dragOffset"
     )
 
-    // Solid 100% opaque backgrounds prevent ANY background bleed through
     val rowBackground = when {
-        row.isSunday -> TrackerColors.SurfaceDark
-        row.isAbsent -> Color(0xFF220D13) // Solid dark rose
-        isToday -> TrackerColors.SurfaceElevated
-        else -> TrackerColors.SurfaceDark
+        row.isAbsent -> TrackerColors.DangerRoseSubtle
+        isToday -> TrackerColors.SurfaceElevated.copy(alpha = 0.5f)
+        else -> Color.Transparent
     }
 
     val rowBorder = when {
-        row.isSunday -> TrackerColors.HairlineBorder.copy(alpha = 0.25f)
-        row.isAbsent -> TrackerColors.DangerRose.copy(alpha = 0.6f)
+        row.isAbsent -> TrackerColors.DangerRose.copy(alpha = 0.3f)
         isToday -> TrackerColors.HairlineBorderLight
-        else -> TrackerColors.HairlineBorder.copy(alpha = 0.6f)
+        else -> Color.Transparent
     }
 
     // High contrast threshold: always green for >= 75%
     val pctColor = when {
         row.isSunday -> TrackerColors.TextSubtle
         row.isAbsent -> TrackerColors.DangerRose
-        row.percentage >= 75.0 -> TrackerColors.SafeEmerald // Always green for >= 75%, never turns white!
+        row.percentage >= 75.0 -> TrackerColors.SafeEmerald
         row.percentage >= 70.0 -> TrackerColors.WarningAmber
         else -> TrackerColors.DangerRose
     }
@@ -642,37 +639,21 @@ private fun ProjectionLine(
                 ) {
                     when {
                         row.isSunday -> {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(TrackerColors.SurfaceInput)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "OFF",
-                                    color = TrackerColors.TextSubtle,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
+                            Text(
+                                text = "OFF",
+                                color = TrackerColors.TextSubtle,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
                         row.isAbsent -> {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF3B151E))
-                                    .border(1.dp, TrackerColors.DangerRose, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "BUNK",
-                                    color = TrackerColors.DangerRose,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Black,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
+                            Text(
+                                text = "BUNK",
+                                color = TrackerColors.DangerRose,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
                         else -> {
                             SkippableBadge(count = row.skippable)
@@ -684,26 +665,15 @@ private fun ProjectionLine(
     }
 }
 
-/** Refined pill: periods that can still be skipped from this day on. */
+/** Minimal buffer text: periods that can still be skipped from this day on. */
 @Composable
 private fun SkippableBadge(count: Int) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (count > 0) TrackerColors.SafeEmeraldSubtle else TrackerColors.SurfaceInput)
-            .border(
-                1.dp,
-                if (count > 0) TrackerColors.SafeEmerald.copy(alpha = 0.35f) else TrackerColors.HairlineBorder,
-                RoundedCornerShape(4.dp)
-            )
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(
-            text = if (count > 0) "+$count" else "0",
-            color = if (count > 0) TrackerColors.SafeEmerald else TrackerColors.TextSubtle,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-    }
+    Text(
+        text = if (count > 0) "+$count" else "0",
+        color = if (count > 0) TrackerColors.SafeEmerald else TrackerColors.TextSubtle,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        textAlign = TextAlign.Center
+    )
 }
