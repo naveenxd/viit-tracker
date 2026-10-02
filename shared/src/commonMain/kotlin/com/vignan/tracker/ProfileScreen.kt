@@ -119,9 +119,9 @@ fun ProfileScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(16.dp))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
                 .padding(18.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -312,9 +312,9 @@ fun ProfileScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -323,12 +323,12 @@ fun ProfileScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(6.dp))
                         .background(if (isSelected) TrackerColors.SurfaceElevated else Color.Transparent)
                         .border(
                             1.dp,
                             if (isSelected) TrackerColors.HairlineBorderLight else Color.Transparent,
-                            RoundedCornerShape(8.dp)
+                            RoundedCornerShape(6.dp)
                         )
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -787,93 +787,69 @@ private fun FeesAndConductSection(
         }
 
         // --- 4. Account Actions ---
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
-                .padding(16.dp)
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // Sync row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !isRefreshing) { onRefresh() }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isRefreshing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(12.dp),
+                            color = TrackerColors.TextMuted,
+                            strokeWidth = 1.5.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                    }
                     Text(
-                        text = "LAST SYNC",
-                        color = TrackerColors.TextSubtle,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = if (isRefreshing) "Syncing…" else "Sync from ERP",
+                        color = TrackerColors.TextSecondary,
+                        fontSize = 14.sp,
                         fontFamily = FontFamily.SansSerif
                     )
-
-                    Text(
-                        text = scrapedAt?.take(16)?.replace("T", "  ") ?: "Active Session",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
                 }
+                Text(
+                    text = scrapedAt?.take(16)?.replace("T", "  ") ?: "—",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Sync from ERP button
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TrackerColors.SurfaceElevated)
-                            .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(8.dp))
-                            .clickable(enabled = !isRefreshing) { onRefresh() }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            if (isRefreshing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(12.dp),
-                                    color = TrackerColors.TextPrimary,
-                                    strokeWidth = 1.5.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(
-                                text = if (isRefreshing) "SYNCING..." else "SYNC FROM ERP",
-                                color = TrackerColors.TextPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.SansSerif
-                            )
-                        }
-                    }
+            // Divider
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(TrackerColors.HairlineBorder)
+            )
 
-                    // Logout button
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(TrackerColors.DangerRoseSubtle)
-                            .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                            .clickable { onLogout() }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "LOGOUT",
-                            color = TrackerColors.DangerRose,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.SansSerif
-                        )
-                    }
-                }
+            // Sign out row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onLogout() }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sign out",
+                    color = TrackerColors.DangerRose,
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
             }
         }
     }
@@ -891,9 +867,9 @@ private fun SectionCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1050,9 +1026,9 @@ private fun LoadingPlaceholderCard(message: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
             .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -1062,7 +1038,7 @@ private fun LoadingPlaceholderCard(message: String) {
         ) {
             CircularProgressIndicator(
                 modifier = Modifier.size(24.dp),
-                color = TrackerColors.PrimaryAccent,
+                color = TrackerColors.TextSecondary,
                 strokeWidth = 2.dp
             )
             Text(

@@ -280,10 +280,10 @@ fun TimetableScreen(
                 Text(
                     text = branchLabel ?: "TIMETABLE",
                     color = TrackerColors.TextPrimary,
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 0.5.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    letterSpacing = (-0.5).sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -498,7 +498,7 @@ private fun GhostRowCard(
                 color = if (tag != null) TrackerColors.TextMuted else TrackerColors.TextSubtle,
                 fontSize = 13.sp,
                 fontWeight = if (tag != null) FontWeight.SemiBold else FontWeight.Normal,
-                fontFamily = if (tag != null) FontFamily.SansSerif else FontFamily.Serif,
+                fontFamily = FontFamily.SansSerif,
                 modifier = Modifier.weight(1f)
             )
             if (tag != null && tagColor != null) {
@@ -649,9 +649,9 @@ private fun RealTimeNowCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
         Row {
@@ -684,9 +684,9 @@ private fun RealTimeNowCard(
                 Text(
                     text = statusTitle,
                     color = TrackerColors.TextPrimary,
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif,
+                    fontFamily = FontFamily.SansSerif,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

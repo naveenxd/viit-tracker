@@ -266,7 +266,7 @@ private fun ReportDateField(
         colors = TextFieldDefaults.colors(
             focusedContainerColor = TrackerColors.SurfaceInput,
             unfocusedContainerColor = TrackerColors.SurfaceInput,
-            cursorColor = TrackerColors.PrimaryAccent,
+            cursorColor = TrackerColors.TextPrimary,
             focusedIndicatorColor = TrackerColors.BorderFocused,
             unfocusedIndicatorColor = TrackerColors.HairlineBorder,
             focusedLabelColor = TrackerColors.TextSecondary,
@@ -292,12 +292,11 @@ private fun FetchReportButton(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "FETCH REPORT",
+            text = "Load report",
             color = if (enabled) TrackerColors.PureBlack else TrackerColors.TextMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.sp
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.SansSerif
         )
     }
 }
@@ -311,9 +310,9 @@ private fun ReportResultCard(report: AttendanceReportResponse, rangeLabel: Strin
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
                 .padding(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -365,9 +364,9 @@ private fun ReportResultCard(report: AttendanceReportResponse, rangeLabel: Strin
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp))
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
         ) {
             report.subjects.forEachIndexed { index, subject ->
                 val pctColor = when {
