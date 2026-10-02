@@ -6,50 +6,51 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 object TrackerColors {
-    val PureBlack = Color(0xFF000000)
-    val SurfaceDark = Color(0xFF0D0E12)
-    val SurfaceCard = Color(0xFF12151E)
-    val SurfaceElevated = Color(0xFF181B26)
-    val SurfaceInput = Color(0xFF151822)
-    
-    val HairlineBorder = Color(0xFF1E2230)
-    val HairlineBorderLight = Color(0xFF2B3044)
-    val BorderFocused = Color(0xFF6366F1)
+    // Backgrounds
+    val PureBlack       = Color(0xFF000000)
+    val SurfaceDark     = Color(0xFF0A0A0A)
+    val SurfaceCard     = Color(0xFF111111)
+    val SurfaceElevated = Color(0xFF171717)
+    val SurfaceInput    = Color(0xFF0D0D0D)
 
-    val PrimaryWhite = Color(0xFFFFFFFF)
-    val PrimaryAccent = Color(0xFF6366F1)
+    // Borders
+    val HairlineBorder      = Color(0xFF1C1C1C)
+    val HairlineBorderLight = Color(0xFF262626)
+    val BorderFocused       = Color(0xFF404040)
 
-    val SafeEmerald = Color(0xFF10B981)
-    val SafeEmeraldSubtle = Color(0x1F10B981)
+    // Text
+    val PrimaryWhite  = Color(0xFFFFFFFF)
+    val PrimaryAccent = Color(0xFFFFFFFF)
+    val TextPrimary   = Color(0xFFEDEDED)
+    val TextSecondary = Color(0xFF8C8C8C)
+    val TextMuted     = Color(0xFF555555)
+    val TextSubtle    = Color(0xFF383838)
 
-    val WarningAmber = Color(0xFFF59E0B)
+    // Status
+    val SafeEmerald        = Color(0xFF22C55E)
+    val SafeEmeraldSubtle  = Color(0x1522C55E)
+    val WarningAmber       = Color(0xFFF59E0B)
     val WarningAmberSubtle = Color(0x1FF59E0B)
-
-    val DangerRose = Color(0xFFF43F5E)
-    val DangerRoseSubtle = Color(0x1FF43F5E)
-
-    val TextPrimary = Color(0xFFF8FAFC)
-    val TextSecondary = Color(0xFF94A3B8)
-    val TextMuted = Color(0xFF64748B)
-    val TextSubtle = Color(0xFF475569)
+    val DangerRose         = Color(0xFFEF4444)
+    val DangerRoseSubtle   = Color(0x15EF4444)
 }
 
 private val DarkColorScheme = darkColorScheme(
-    primary = TrackerColors.PrimaryAccent,
-    onPrimary = Color.White,
-    primaryContainer = TrackerColors.SurfaceElevated,
+    primary            = TrackerColors.PrimaryWhite,
+    onPrimary          = TrackerColors.PureBlack,
+    primaryContainer   = TrackerColors.SurfaceElevated,
     onPrimaryContainer = TrackerColors.TextPrimary,
-    background = TrackerColors.PureBlack,
-    onBackground = TrackerColors.TextPrimary,
-    surface = TrackerColors.SurfaceDark,
-    onSurface = TrackerColors.TextPrimary,
-    surfaceVariant = TrackerColors.SurfaceElevated,
-    onSurfaceVariant = TrackerColors.TextSecondary,
-    outline = TrackerColors.HairlineBorder,
-    error = TrackerColors.DangerRose,
-    onError = Color.White,
-    errorContainer = TrackerColors.DangerRoseSubtle,
-    onErrorContainer = TrackerColors.DangerRose
+    background         = TrackerColors.PureBlack,
+    onBackground       = TrackerColors.TextPrimary,
+    surface            = TrackerColors.SurfaceDark,
+    onSurface          = TrackerColors.TextPrimary,
+    surfaceVariant     = TrackerColors.SurfaceElevated,
+    onSurfaceVariant   = TrackerColors.TextSecondary,
+    outline            = TrackerColors.HairlineBorder,
+    error              = TrackerColors.DangerRose,
+    onError            = Color.White,
+    errorContainer     = TrackerColors.DangerRoseSubtle,
+    onErrorContainer   = TrackerColors.DangerRose
 )
 
 @Composable
