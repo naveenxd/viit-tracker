@@ -212,22 +212,19 @@ private fun HeroTerminalCard(
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 4.dp)
     ) {
-        // Identity line
+        // Greeting + live status pill
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = studentName.ifBlank { "Student" }.uppercase(),
+                text = timeGreeting(),
                 color = TrackerColors.TextMuted,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                letterSpacing = 2.sp
             )
             StatusPill(
                 hasData = hasData,
@@ -236,11 +233,35 @@ private fun HeroTerminalCard(
             )
         }
 
-        // Meta: Roll • Branch • Semester
-        Spacer(modifier = Modifier.height(2.dp))
+        // Greeting: name (roll no)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = displayName(studentName),
+                color = TrackerColors.TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (rollNumber.isNotBlank()) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "($rollNumber)",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+            }
+        }
+
+        // Meta: Branch • Semester
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = listOfNotNull(
-                rollNumber.takeIf { it.isNotBlank() },
                 branch.takeIf { it.isNotBlank() },
                 semester.takeIf { it.isNotBlank() }
             ).joinToString("  ·  ").ifBlank { "—" },
@@ -642,7 +663,12 @@ private fun FetchAttendanceButton(
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
             .clickable(enabled = !isLoading) { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .height(46.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+            .clickable(enabled = !isLoading) { onClick() }
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isLoading) {
@@ -669,42 +695,36 @@ private fun FetchAttendanceButton(
                 text = "Refresh attendance",
                 color = TrackerColors.TextSecondary,
                 fontSize = 13.sp,
-                fontFamily = FontFamily.SansSerif
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 1
             )
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
-        Column(horizontalAlignment = Alignment.End) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             val durationText = lastFetchDurationMs?.let { formatResponseTime(it) }
-            when {
-                isLoading -> Text(
-                    text = "—",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                durationText != null -> Text(
+            if (durationText != null) {
+                Text(
                     text = "$durationText ⚡",
                     color = TrackerColors.SafeEmerald,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace
-                )
-                hasData -> Text(
-                    text = "cached",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
                 )
             }
-            if (!isLoading) {
+            if (hasData) {
                 Text(
                     text = formatFetchedAt(scrapedAt),
                     color = TrackerColors.TextSubtle,
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -717,6 +737,23 @@ private fun formatResponseTime(ms: Long): String {
     val millis = (ms % 1000).toInt()
     return "$seconds.${millis.toString().padStart(3, '0')} sec"
 }
+
+/** Time-of-day greeting for the home header. */
+private fun timeGreeting(): String {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 5..11 -> "GOOD MORNING"
+        in 12..16 -> "GOOD AFTERNOON"
+        in 17..20 -> "GOOD EVENING"
+        else -> "GOOD NIGHT"
+    }
+}
+
+/** "INDELA NAVEEN" → "Indela Naveen" — greeting-case for the header name. */
+private fun displayName(raw: String): String =
+    raw.trim().split(Regex("\\s+"))
+        .joinToString(" ") { it.lowercase().replaceFirstChar { c -> c.uppercase() } }
+        .ifBlank { "Student" }
 
 /**
  * ISO scrapedAt → local, compact, human ("21 Sep, 10:12 pm"). Epoch-0 dates
@@ -963,40 +1000,48 @@ fun ExpressiveFloatingPillNavBar(
                                 ) { onTabSelected(tab) },
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
+                            // Unselected: icon. Selected: label only, centered — long
+                            // labels like TIMETABLE get the full capsule width instead
+                            // of squeezing in next to the icon.
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = !isSelected,
+                                enter = fadeIn(animationSpec = tween(140)) + expandHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+                                    expandFrom = Alignment.CenterHorizontally
+                                ),
+                                exit = fadeOut(animationSpec = tween(90)) + shrinkHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+                                    shrinkTowards = Alignment.CenterHorizontally
+                                )
                             ) {
                                 NavTabIcon(tab = tab, color = contentColor, scale = iconScale)
-                                AnimatedVisibility(
-                                    visible = isSelected,
-                                    enter = fadeIn(
-                                        animationSpec = tween(160, delayMillis = 30)
-                                    ) + expandHorizontally(
-                                        animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
-                                        expandFrom = Alignment.Start
-                                    ),
-                                    exit = fadeOut(
-                                        animationSpec = tween(90)
-                                    ) + shrinkHorizontally(
-                                        animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
-                                        shrinkTowards = Alignment.Start
-                                    )
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Spacer(modifier = Modifier.width(5.dp))
-                                        Text(
-                                            text = tab.label,
-                                            color = contentColor,
-                                            fontSize = 10.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = FontFamily.SansSerif,
-                                            letterSpacing = 0.3.sp,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                }
+                            }
+
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = isSelected,
+                                enter = fadeIn(
+                                    animationSpec = tween(160, delayMillis = 80)
+                                ) + expandHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+                                    expandFrom = Alignment.CenterHorizontally
+                                ),
+                                exit = fadeOut(
+                                    animationSpec = tween(90)
+                                ) + shrinkHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+                                    shrinkTowards = Alignment.CenterHorizontally
+                                )
+                            ) {
+                                Text(
+                                    text = tab.label,
+                                    color = contentColor,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = FontFamily.SansSerif,
+                                    letterSpacing = 0.5.sp,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }

@@ -43,6 +43,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -174,30 +177,25 @@ fun ProfileScreen(
 
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            // Copy Roll No Pill
+                            // Copy roll no — icon-only button
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(if (isCopied) TrackerColors.SafeEmeraldSubtle else TrackerColors.SurfaceElevated)
-                                    .border(
-                                        1.dp,
-                                        if (isCopied) TrackerColors.SafeEmerald else TrackerColors.HairlineBorderLight,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .clickable {
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         if (rollNo.isNotBlank() && rollNo != "—") {
                                             clipboardManager.setText(AnnotatedString(rollNo))
                                             isCopied = true
                                         }
-                                    }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = if (isCopied) "COPIED" else "COPY",
-                                    color = if (isCopied) TrackerColors.SafeEmerald else TrackerColors.TextMuted,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
+                                CopyIcon(
+                                    copied = isCopied,
+                                    tint = if (isCopied) TrackerColors.SafeEmerald else TrackerColors.TextMuted
                                 )
                             }
 
@@ -1018,6 +1016,52 @@ private fun HeroMetricTile(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/** Minimal copy glyph (two offset rounded sheets); swaps to a check while copied. */
+@Composable
+private fun CopyIcon(copied: Boolean, tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(15.dp)) {
+        if (copied) {
+            val path = Path().apply {
+                moveTo(size.width * 0.18f, size.height * 0.54f)
+                lineTo(size.width * 0.40f, size.height * 0.76f)
+                lineTo(size.width * 0.84f, size.height * 0.26f)
+            }
+            drawPath(
+                path = path,
+                color = tint,
+                style = Stroke(width = size.width * 0.13f, cap = StrokeCap.Round)
+            )
+        } else {
+            val stroke = size.width * 0.11f
+            val radius = CornerRadius(size.width * 0.18f, size.width * 0.18f)
+
+            // Back sheet
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(size.width * 0.34f, size.height * 0.06f),
+                size = Size(size.width * 0.56f, size.height * 0.60f),
+                cornerRadius = radius,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+
+            // Front sheet (filled so it occludes the back sheet's lower-left part)
+            drawRoundRect(
+                color = TrackerColors.SurfaceDark,
+                topLeft = Offset(size.width * 0.10f, size.height * 0.30f),
+                size = Size(size.width * 0.62f, size.height * 0.64f),
+                cornerRadius = radius
+            )
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(size.width * 0.10f, size.height * 0.30f),
+                size = Size(size.width * 0.62f, size.height * 0.64f),
+                cornerRadius = radius,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+        }
     }
 }
 
