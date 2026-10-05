@@ -4,27 +4,31 @@
     <color name="launcher_background">#FF0A0A0A</color>
     <color name="splash_bg">#FF0A0A0A</color>
 
-    <!-- Widget colors matching the app theme -->
-    <color name="surface_dark">#FF0D0E12</color>
-    <color name="surface_elevated">#FF181B26</color>
-    
-    <color name="text_primary">#FFF8FAFC</color>
-    <color name="text_secondary">#FF94A3B8</color>
-    <color name="text_muted">#FF64748B</color>
-    <color name="text_subtle">#FF475569</color>
-    
-    <color name="hairline_border">#FF1E2230</color>
-    <color name="hairline_border_light">#FF2B3044</color>
-    
-    <color name="safe_emerald">#FF10B981</color>
-    <color name="safe_emerald_subtle">#1F10B981</color>
-    
+    <!-- Widget colors — mirrors TrackerColors so the widget and app agree. -->
+    <color name="surface_dark">#FF0A0A0A</color>
+    <color name="surface_elevated">#FF171717</color>
+
+    <color name="text_primary">#FFEDEDED</color>
+    <color name="text_secondary">#FF8C8C8C</color>
+    <color name="text_muted">#FF555555</color>
+    <color name="text_subtle">#FF383838</color>
+
+    <color name="hairline_border">#FF1C1C1C</color>
+    <color name="hairline_border_light">#FF262626</color>
+
+    <!-- Widget card edge — the in-app hairlines are invisible against a black
+         card, so the widget gets a slightly brighter stroke of its own. -->
+    <color name="widget_border">#FF3F4654</color>
+
+    <color name="safe_emerald">#FF22C55E</color>
+    <color name="safe_emerald_subtle">#1522C55E</color>
+
     <color name="warning_amber">#FFF59E0B</color>
     <color name="warning_amber_subtle">#1FF59E0B</color>
-    
-    <color name="danger_rose">#FFF43F5E</color>
-    <color name="danger_rose_subtle">#1FF43F5E</color>
-    
-    <color name="primary_accent">#FF6366F1</color>
+
+    <color name="danger_rose">#FFEF4444</color>
+    <color name="danger_rose_subtle">#15EF4444</color>
+
+    <color name="primary_accent">#FFFFFFFF</color>
     <color name="primary_white">#FFFFFFFF</color>
 </resources>
