@@ -8,9 +8,11 @@ import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.Toast
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -28,8 +30,22 @@ object WidgetUpdater {
     /** Broadcast action sent when the user taps the widget. */
     const val ACTION_REFRESH = "com.vignan.tracker.action.WIDGET_REFRESH"
 
+    /** How long the post-refresh footer confirmation stays on screen. */
+    private const val FLASH_HOLD_MS = 3_000L
+
+    /**
+     * Toast.show() only *posts* the enqueue to the main looper; if the broadcast's
+     * goAsync() finishes before that message runs the process can be torn down and
+     * the toast is never handed to the system. Holding the receiver briefly closes
+     * the race.
+     */
+    private const val TOAST_DRAIN_MS = 700L
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshMutex = Mutex()
+
+    /** Monotonic id of the last render — lets a delayed re-render detect staleness. */
+    private val renderSeq = AtomicInteger(0)
 
     // ---------------------------------------------------------------- entry points
 
@@ -69,22 +85,52 @@ object WidgetUpdater {
                 renderAll(appContext, before.asSyncing())
 
                 val result = AttendanceRepository().fetchLiveAttendance()
-                val (data, message) = result.fold(
-                    onSuccess = { resp -> WidgetData.from(resp) to "Attendance updated ✓" },
+                val outcome = result.fold(
+                    onSuccess = { resp ->
+                        WidgetRefreshOutcome(
+                            data = WidgetData.from(resp),
+                            toast = "Attendance updated",
+                            flash = WidgetFlash("updated ✓", ok = true)
+                        )
+                    },
                     onFailure = { err ->
                         when {
                             // Repository cleared the store on bad credentials —
                             // don't keep showing stale data as if it were valid.
                             err is ApiError.InvalidCredentials ->
-                                WidgetData.syncing() to "Session expired — log in to refresh"
+                                WidgetRefreshOutcome(
+                                    data = WidgetData.syncing(),
+                                    toast = "Session expired — log in to refresh",
+                                    flash = WidgetFlash("session expired", ok = false)
+                                )
                             // Network failed → keep showing last known data.
-                            before.isSyncing -> before to "Update failed — no cached data"
-                            else -> before to "Update failed — showing cached data"
+                            before.isSyncing ->
+                                WidgetRefreshOutcome(
+                                    data = before,
+                                    toast = "Update failed — no cached data",
+                                    flash = WidgetFlash("couldn't update", ok = false)
+                                )
+                            else ->
+                                WidgetRefreshOutcome(
+                                    data = before,
+                                    toast = "Update failed — showing cached data",
+                                    flash = WidgetFlash("couldn't update", ok = false)
+                                )
                         }
                     }
                 )
-                renderAll(appContext, data)
-                toast(appContext, message)
+
+                // The widget itself carries the confirmation (works even when Android
+                // suppresses the background toast), then reverts to its idle footer.
+                val seq = renderAll(appContext, outcome.data, outcome.flash)
+                scope.launch {
+                    delay(FLASH_HOLD_MS)
+                    if (renderSeq.get() == seq) renderAll(appContext, outcome.data)
+                }
+
+                toast(appContext, outcome.toast)
+                // Keep the broadcast alive until the toast has actually been enqueued.
+                delay(TOAST_DRAIN_MS)
             } finally {
                 if (locked) refreshMutex.unlock()
                 onDone?.invoke()
@@ -117,19 +163,28 @@ object WidgetUpdater {
 
     // ---------------------------------------------------------------- rendering
 
-    private fun renderAll(context: Context, data: WidgetData) {
+    /**
+     * Write a snapshot into every widget instance.
+     *
+     * @param flash transient footer confirmation ("updated ✓") after a tap refresh.
+     * @return the render generation, so callers can tell whether a later render has
+     *         superseded this one before scheduling a revert.
+     */
+    private fun renderAll(context: Context, data: WidgetData, flash: WidgetFlash? = null): Int {
+        val seq = renderSeq.incrementAndGet()
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(ComponentName(context, AttendanceAppWidget::class.java))
-        if (ids.isEmpty()) return
+        if (ids.isEmpty()) return seq
 
         val views = RemoteViews(context.packageName, R.layout.widget_attendance)
         views.setOnClickPendingIntent(R.id.widget_container, refreshPendingIntent(context))
-        bindData(context, views, data)
+        bindData(context, views, data, flash)
         manager.updateAppWidget(ids, views)
+        return seq
     }
 
     /** Write a [WidgetData] snapshot into the widget layout. */
-    private fun bindData(context: Context, views: RemoteViews, data: WidgetData) {
+    private fun bindData(context: Context, views: RemoteViews, data: WidgetData, flash: WidgetFlash? = null) {
         val pctColor = statusColor(context, data.overallPercentage)
         val isSafe = !data.isSyncing && data.canSkip
         val isCritical = !data.isSyncing && !data.canSkip
@@ -175,6 +230,23 @@ object WidgetUpdater {
             if (data.isSyncing) "— / —" else "${data.attended} / ${data.conducted}"
         )
 
+        // Today-row hint — doubles as the tap-to-refresh confirmation.
+        // Keep the idle text short: it shares the row with today's subject chips.
+        views.setTextViewText(
+            R.id.widget_refresh_hint,
+            flash?.text ?: "tap ↻"
+        )
+        views.setTextColor(
+            R.id.widget_refresh_hint,
+            context.getColor(
+                when {
+                    flash == null -> R.color.text_muted
+                    flash.ok -> R.color.safe_emerald
+                    else -> R.color.danger_rose
+                }
+            )
+        )
+
         // Today chips
         bindTodayChips(context, views, data, accent)
     }
@@ -197,8 +269,9 @@ object WidgetUpdater {
                 R.id.widget_today_message,
                 when {
                     data.isSyncing -> "fetching today's status…"
-                    data.todayEmpty -> "no classes recorded yet"
-                    else -> "no register entry for today"
+                    data.todayNoClasses -> "no classes yet"
+                    data.todayNoRecords -> "no attendance recorded yet"
+                    else -> "no classes yet"
                 }
             )
             views.setTextColor(R.id.widget_today_message, context.getColor(R.color.text_muted))
@@ -256,6 +329,16 @@ internal data class WidgetTodayChip(
     val status: String
 )
 
+/** Transient footer confirmation shown in the widget after a tap-to-refresh. */
+internal data class WidgetFlash(val text: String, val ok: Boolean)
+
+/** Everything a tap-to-refresh produces: new snapshot, toast text, widget footer text. */
+private data class WidgetRefreshOutcome(
+    val data: WidgetData,
+    val toast: String,
+    val flash: WidgetFlash?
+)
+
 /** Immutable widget snapshot derived from a [LiveAttendanceResponse]. */
 internal data class WidgetData(
     val studentName: String = "",
@@ -265,7 +348,10 @@ internal data class WidgetData(
     val conducted: Int = 0,
     val canSkip: Boolean = false,
     val todayChips: List<WidgetTodayChip> = emptyList(),
-    val todayEmpty: Boolean = false,
+    /** No register entry for today at all — there are no classes logged yet. */
+    val todayNoClasses: Boolean = false,
+    /** Today's entry exists but holds no per-subject badges. */
+    val todayNoRecords: Boolean = false,
     val isSyncing: Boolean = false
 ) {
     fun asSyncing(): WidgetData = copy(isSyncing = true)
@@ -277,12 +363,14 @@ internal data class WidgetData(
             val skips = response.intelligence.safeSkips
             val aggregate = response.profile.aggregate
 
-            // Prefer the register entry matching today's calendar date; fall back to
-            // the last entry (the portal's "current" day) when dates don't parse.
+            // Today = the register entry matching today's calendar date. An entry whose
+            // date can't be parsed is still treated as today (same rule the dashboard
+            // uses) — but the LAST entry is never assumed to be today, otherwise a
+            // previous day's "present" classes would masquerade as today's schedule.
             val nowMs = System.currentTimeMillis()
             val entries = response.attendance.today
             val todayEntry = entries.firstOrNull { isSameCalendarDay(it.date, nowMs) }
-                ?: entries.lastOrNull()
+                ?: entries.lastOrNull { parseLooseDate(it.date) == null }
             val chips = todayEntry?.badges.orEmpty().map { badge ->
                 WidgetTodayChip(
                     subject = shortSubjectCode(badge.subject),
@@ -299,7 +387,8 @@ internal data class WidgetData(
                 conducted = aggregate.held,
                 canSkip = skips.status.equals("Safe", ignoreCase = true),
                 todayChips = chips,
-                todayEmpty = entries.isEmpty()
+                todayNoClasses = todayEntry == null,
+                todayNoRecords = todayEntry != null && todayEntry.badges.isEmpty()
             )
         }
 
