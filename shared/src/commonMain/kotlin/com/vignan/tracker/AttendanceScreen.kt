@@ -58,6 +58,10 @@ fun AttendanceScreen() {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showValidationDialog by remember { mutableStateOf(false) }
     var lastFetchDurationMs by remember { mutableStateOf<Long?>(null) }
+    // Bumped on every user-triggered fetch so the home screen can replay its
+    // "data appears" transition on each manual refresh (not on the silent
+    // auto-fetch at launch, which would re-animate unprompted).
+    var fetchSequence by remember { mutableStateOf(0) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -154,6 +158,7 @@ fun AttendanceScreen() {
                     )
                 }
             )
+            fetchSequence++
             isLoading = false
         }
     }
@@ -303,6 +308,7 @@ fun AttendanceScreen() {
                             liveResponse = liveAttendanceResponse,
                             isRefreshing = isLoading,
                             lastFetchDurationMs = lastFetchDurationMs,
+                            dataVersion = fetchSequence,
                             onFetchClick = { fetchAttendance() },
                             onLogout = {
                                 scope.launch { repository.logout() }

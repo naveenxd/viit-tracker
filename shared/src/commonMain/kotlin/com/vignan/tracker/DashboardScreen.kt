@@ -1,5 +1,6 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -9,7 +10,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -79,6 +83,7 @@ fun DashboardScreen(
     liveResponse: LiveAttendanceResponse? = null,
     isRefreshing: Boolean = false,
     lastFetchDurationMs: Long? = null,
+    dataVersion: Int = 0,
     onFetchClick: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
@@ -110,7 +115,8 @@ fun DashboardScreen(
                             overallPercentage = overallPercentage,
                             totalAttended = totalAttended,
                             totalConducted = totalConducted,
-                            hasData = hasData
+                            hasData = hasData,
+                            dataVersion = dataVersion
                         )
                     }
 
@@ -198,7 +204,8 @@ private fun HeroTerminalCard(
     overallPercentage: Double,
     totalAttended: Int,
     totalConducted: Int,
-    hasData: Boolean
+    hasData: Boolean,
+    dataVersion: Int = 0
 ) {
     val statusColor = when {
         !hasData -> TrackerColors.TextMuted
@@ -274,70 +281,97 @@ private fun HeroTerminalCard(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Big percentage number
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                if (hasData) {
-                    val pctText = formatPercentage(overallPercentage)
-                    val intPart = pctText.substringBefore('.')
-                    val fracPart = if ('.' in pctText) "." + pctText.substringAfter('.') else null
-                    Text(
-                        text = intPart,
-                        color = TrackerColors.TextPrimary,
-                        fontSize = 52.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 52.sp
-                    )
-                    if (fracPart != null) {
+        // Attendance block: renders the "-/-" placeholder first, then the real
+        // numbers appear (fade + lift + scale) once the snapshot lands — the same
+        // read as the home-screen widget's syncing → data transition. Every manual
+        // refresh bumps dataVersion, so the reveal replays on each pull too.
+        AnimatedContent(
+            targetState = if (hasData) "data:$dataVersion" else "placeholder",
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(420, delayMillis = 90)) +
+                        scaleIn(
+                            initialScale = 0.94f,
+                            animationSpec = tween(420, delayMillis = 90)
+                        ) +
+                        slideInVertically(
+                            animationSpec = tween(420, delayMillis = 90)
+                        ) { it / 4 })
+                    .togetherWith(fadeOut(animationSpec = tween(140)))
+            },
+            label = "heroAttendanceReveal"
+        ) { state ->
+            // "placeholder" is the "-/-" state; anything else is a real snapshot.
+            val ready = state != "placeholder"
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    if (ready) {
+                        val pctText = formatPercentage(overallPercentage)
+                        val intPart = pctText.substringBefore('.')
+                        val fracPart = if ('.' in pctText) "." + pctText.substringAfter('.') else null
                         Text(
-                            text = fracPart,
-                            color = statusColor,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
+                            text = intPart,
+                            color = TrackerColors.TextPrimary,
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(bottom = 6.dp)
+                            lineHeight = 52.sp
+                        )
+                        if (fracPart != null) {
+                            Text(
+                                text = fracPart,
+                                color = statusColor,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "—",
+                            color = TrackerColors.TextMuted,
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 52.sp
                         )
                     }
-                } else {
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
                     Text(
-                        text = "—",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 52.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 52.sp
+                        text = if (ready) "$totalAttended / $totalConducted" else "— / —",
+                        color = if (ready) TrackerColors.TextSecondary else TrackerColors.TextSubtle,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "classes attended",
+                        color = TrackerColors.TextSubtle,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.SansSerif
                     )
                 }
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                Text(
-                    text = if (hasData) "$totalAttended / $totalConducted" else "— / —",
-                    color = if (hasData) TrackerColors.TextSecondary else TrackerColors.TextSubtle,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "classes attended",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.SansSerif
-                )
             }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Progress bar — subtle 1px track
+        // Progress bar — subtle 1px track that fills in with the data
+        val progress by animateFloatAsState(
+            targetValue = (overallPercentage / 100.0).toFloat().coerceIn(0f, 1f),
+            animationSpec = tween(durationMillis = 700),
+            label = "heroAttendanceProgress"
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -347,7 +381,7 @@ private fun HeroTerminalCard(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth((overallPercentage / 100.0).toFloat().coerceIn(0f, 1f))
+                    .fillMaxWidth(progress)
                     .height(1.dp)
                     .clip(CircleShape)
                     .background(statusColor)
