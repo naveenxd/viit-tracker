@@ -3,6 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Android 13+ suppresses toasts from a BACKGROUND state (widget taps, receivers)
+         unless notifications are enabled for the package — see
+         NotificationManagerService#checkCanEnqueueToast. Without this, the tap-to-refresh
+         toast on the home widget is silently dropped while the widget still updates. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
