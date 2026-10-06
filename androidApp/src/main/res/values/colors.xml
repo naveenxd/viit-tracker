@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher & splash -->
-    <color name="launcher_background">#FF0A0A0A</color>
+    <!-- Launcher icon tile: bright, non-white backdrop so the mark reads on
+         both light and dark launchers. Splash keeps the app's dark surface. -->
+    <color name="launcher_background">#FFE5F0FA</color>
     <color name="splash_bg">#FF0A0A0A</color>
 
     <!-- Widget colors — mirrors TrackerColors so the widget and app agree. -->
