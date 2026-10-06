@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -448,10 +449,12 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
 
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .wrapContentHeight()
                 .clip(RoundedCornerShape(12.dp))
                 .background(TrackerColors.SurfaceDark)
                 .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+                .padding(bottom = 10.dp)
         ) {
             // Frozen left column — subject names, one per row.
             Column(modifier = Modifier.width(RAW_SUBJECT_COL_W)) {
@@ -503,7 +506,7 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
             // Scrolling grid: one LazyRow item per date, each holding that day's
             // header plus a cell for every subject. Only visible dates compose.
             LazyRow(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.height(RAW_HEADER_H + RAW_ROW_H * subjects.size),
                 contentPadding = PaddingValues(end = 12.dp)
             ) {
                 items(dates, key = { it }) { date ->

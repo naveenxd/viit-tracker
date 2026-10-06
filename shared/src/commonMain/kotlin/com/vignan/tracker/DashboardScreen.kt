@@ -105,12 +105,9 @@ fun DashboardScreen(
         if (selectedNavTab == MainNavTab.REGISTER) {
             // REGISTER owns its own lazy scroll: it fills the screen and would
             // otherwise be nested in this LazyColumn under an unbounded height.
-            // The 86dp bottom padding keeps content clear of the floating nav bar.
-            RegisterScreen(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 86.dp)
-            )
+            // It reserves its own bottom inset for the nav bar, so it takes the
+            // full height here like every other tab.
+            RegisterScreen(modifier = Modifier.fillMaxSize())
         } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
