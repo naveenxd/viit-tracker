@@ -27,6 +27,18 @@ class AttendanceAppWidget : AppWidgetProvider() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        // The system fires APPWIDGET_UPDATE on the widget's update period (hourly) as
+        // well as on add/resize. super.onReceive renders the cache instantly, then we
+        // refetch in the background so the hourly auto-refresh pulls real data rather
+        // than just re-showing the cache. goAsync keeps the process alive for the fetch.
+        if (intent.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE) {
+            AppContextProvider.context = context.applicationContext
+            super.onReceive(context, intent)
+            val pendingResult = goAsync()
+            WidgetUpdater.refreshOnSchedule(context) { pendingResult.finish() }
+            return
+        }
+
         super.onReceive(context, intent)
         if (intent.action == WidgetUpdater.ACTION_REFRESH) {
             AppContextProvider.context = context.applicationContext

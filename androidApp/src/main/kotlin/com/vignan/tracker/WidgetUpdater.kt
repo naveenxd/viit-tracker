@@ -138,6 +138,44 @@ object WidgetUpdater {
         }
     }
 
+    /**
+     * Silent background refresh driven by the widget's hourly update period
+     * (`android:updatePeriodMillis`). Same fetch as [refreshFromTap] but with no
+     * toast and no "syncing" flicker: the last known snapshot stays on screen until
+     * fresh data (or, on failure, the previous snapshot) is ready.
+     *
+     * @param onDone called when the work completes — pass
+     * [android.content.BroadcastReceiver.PendingResult.finish] from onReceive
+     * (via goAsync) so the system keeps the process alive until the fetch finishes.
+     */
+    fun refreshOnSchedule(context: Context, onDone: (() -> Unit)? = null) {
+        val appContext = context.applicationContext
+        scope.launch {
+            var locked = false
+            try {
+                // Share the lock with tap refreshes so an hourly tick never races a
+                // user tap (and vice versa).
+                locked = refreshMutex.tryLock()
+                if (!locked) return@launch
+
+                val before = loadCached(appContext) ?: WidgetData.syncing()
+                val result = AttendanceRepository().fetchLiveAttendance()
+                val data = result.fold(
+                    onSuccess = { WidgetData.from(it) },
+                    onFailure = { err ->
+                        // Bad credentials clear the store — don't keep showing stale
+                        // data as if it were valid.
+                        if (err is ApiError.InvalidCredentials) WidgetData.syncing() else before
+                    }
+                )
+                renderAll(appContext, data)
+            } finally {
+                if (locked) refreshMutex.unlock()
+                onDone?.invoke()
+            }
+        }
+    }
+
     /** PendingIntent that broadcasts [ACTION_REFRESH] instead of opening the app. */
     private fun refreshPendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, AttendanceAppWidget::class.java).apply {
