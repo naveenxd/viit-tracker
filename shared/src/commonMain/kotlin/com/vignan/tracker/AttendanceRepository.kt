@@ -100,6 +100,16 @@ class AttendanceRepository(
         }
     }
 
+    /** Full day-by-day academic-register matrix. */
+    suspend fun fetchRegister(): Result<AttendanceRegisterResponse> {
+        val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
+        return try {
+            Result.success(api.attendanceRegister(CredentialsRequest(creds.rollNo, creds.password)))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun fetchProfile(): Result<ProfileInfo> {
         val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
         return try {

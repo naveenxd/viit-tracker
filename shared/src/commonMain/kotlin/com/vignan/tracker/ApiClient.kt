@@ -159,6 +159,16 @@ class ApiClient(
         return decode(response.bodyAsText())
     }
 
+    /** Full academic-register matrix — the entire day-by-day attendance history. */
+    suspend fun attendanceRegister(creds: CredentialsRequest): AttendanceRegisterResponse {
+        val response = post(
+            "/api/attendance/register",
+            AppJson.encodeToString(CredentialsRequest.serializer(), creds)
+        )
+        if (!response.status.isSuccess()) mapError(response)
+        return decode(response.bodyAsText())
+    }
+
     /** Student profile only — fast single-endpoint fetch. */
     suspend fun fetchProfile(creds: CredentialsRequest): ProfileResponse {
         val response = post(

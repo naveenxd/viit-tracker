@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -58,6 +59,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
@@ -73,6 +75,7 @@ import kotlin.math.roundToInt
 enum class MainNavTab(val label: String) {
     HOME("HOME"),
     ATTENDANCE("ATTENDANCE"),
+    REGISTER("REGISTER"),
     TIMETABLE("TIMETABLE"),
     PROFILE("PROFILE")
 }
@@ -99,6 +102,16 @@ fun DashboardScreen(
     val hasData = data != null
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (selectedNavTab == MainNavTab.REGISTER) {
+            // REGISTER owns its own lazy scroll: it fills the screen and would
+            // otherwise be nested in this LazyColumn under an unbounded height.
+            // The 86dp bottom padding keeps content clear of the floating nav bar.
+            RegisterScreen(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 86.dp)
+            )
+        } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 86.dp),
@@ -165,6 +178,10 @@ fun DashboardScreen(
                     }
                 }
 
+                MainNavTab.REGISTER -> {
+                    // Rendered as a direct child of the Box above, never here.
+                }
+
                 MainNavTab.TIMETABLE -> {
                     item {
                         TimetableScreen(liveResponse = liveResponse)
@@ -182,6 +199,7 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
         }
 
         // Floating pill navigation bar
@@ -972,8 +990,20 @@ fun ExpressiveFloatingPillNavBar(
     val tabs = MainNavTab.entries
     val selectedIndex = selectedTab.ordinal
 
-    val tabWidth = 80.dp
     val tabGap = 2.dp
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = 16.dp, start = 10.dp, end = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Five tabs no longer fit the old fixed 80dp capsule on a 360dp phone,
+        // so the per-tab width shrinks to whatever the row can spare (capped at
+        // the original 80dp for wide screens). 8dp = inner Surface padding.
+        val gapTotal = tabGap * (tabs.size - 1)
+        val tabWidth = ((maxWidth - 8.dp - gapTotal) / tabs.size).coerceAtMost(80.dp)
 
     // Smooth physics highlight that glides between tabs
     val indicatorOffset by animateDpAsState(
@@ -982,13 +1012,7 @@ fun ExpressiveFloatingPillNavBar(
         label = "navIndicatorOffset"
     )
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(bottom = 16.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(contentAlignment = Alignment.Center) {
         Surface(
             shape = CircleShape,
             color = TrackerColors.SurfaceDark,
@@ -1089,6 +1113,7 @@ fun ExpressiveFloatingPillNavBar(
                 }
             }
         }
+        }
     }
 }
 
@@ -1096,87 +1121,101 @@ fun ExpressiveFloatingPillNavBar(
 private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
     Canvas(
         modifier = Modifier
-            .size(16.dp)
+            .size(18.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
     ) {
+        // One shared stroke weight / corner radius for every glyph, so all five
+        // icons read at the same optical weight at 18dp instead of each deriving
+        // its own from a width fraction.
+        val sw = 1.5.dp.toPx()
+        val r = 2.dp.toPx()
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val inset = sw / 2f
+
         when (tab) {
             MainNavTab.HOME -> {
-                // 2x2 dashboard grid
-                val cell = size.width * 0.42f
-                val gap = size.width - cell * 2f
-                val r = CornerRadius(cell * 0.32f, cell * 0.32f)
-                drawRoundRect(color, Offset.Zero, Size(cell, cell), r)
-                drawRoundRect(color, Offset(cell + gap, 0f), Size(cell, cell), r)
-                drawRoundRect(color, Offset(0f, cell + gap), Size(cell, cell), r)
-                drawRoundRect(color, Offset(cell + gap, cell + gap), Size(cell, cell), r)
+                // House: pitched roof over a boxed body
+                val roof = Path().apply {
+                    moveTo(w * 0.08f, h * 0.46f)
+                    lineTo(w * 0.5f, h * 0.09f)
+                    lineTo(w * 0.92f, h * 0.46f)
+                }
+                drawPath(roof, color, style = stroke)
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(w * 0.20f, h * 0.42f),
+                    size = Size(w * 0.60f, h * 0.50f - inset),
+                    cornerRadius = CornerRadius(r, r),
+                    style = stroke
+                )
             }
 
             MainNavTab.ATTENDANCE -> {
-                // Attendance sheet: document with title bar and list lines
-                val w = size.width
-                val h = size.height
-                val strokeW = w * 0.085f
-                val bodyTop = h * 0.16f
-
+                // Checklist: framed sheet with a title band and two ticked rows
                 drawRoundRect(
                     color = color,
-                    topLeft = Offset(0f, bodyTop),
-                    size = Size(w, h - bodyTop),
-                    cornerRadius = CornerRadius(w * 0.2f, w * 0.2f),
-                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                    topLeft = Offset(inset, inset),
+                    size = Size(w - sw, h - sw),
+                    cornerRadius = CornerRadius(r, r),
+                    style = stroke
                 )
-                // Title band
-                drawLine(color, Offset(w * 0.24f, h * 0.34f), Offset(w * 0.76f, h * 0.34f), strokeW, StrokeCap.Round)
-                // List lines
-                drawLine(color, Offset(w * 0.24f, h * 0.54f), Offset(w * 0.76f, h * 0.54f), strokeW * 0.8f, StrokeCap.Round)
-                drawLine(color, Offset(w * 0.24f, h * 0.72f), Offset(w * 0.6f, h * 0.72f), strokeW * 0.8f, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.30f, h * 0.32f), Offset(w * 0.70f, h * 0.32f), sw, StrokeCap.Round)
+                listOf(0.56f, 0.76f).forEach { y ->
+                    drawCircle(color, radius = sw * 0.55f, center = Offset(w * 0.26f, h * y))
+                    drawLine(color, Offset(w * 0.40f, h * y), Offset(w * 0.74f, h * y), sw * 0.85f, StrokeCap.Round)
+                }
+            }
+
+            MainNavTab.REGISTER -> {
+                // Table matrix: frame + header band + row/column rules
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(inset, inset),
+                    size = Size(w - sw, h - sw),
+                    cornerRadius = CornerRadius(r, r),
+                    style = stroke
+                )
+                drawLine(color, Offset(inset, h * 0.36f), Offset(w - inset, h * 0.36f), sw * 0.9f)
+                drawLine(color, Offset(w * 0.5f, h * 0.36f), Offset(w * 0.5f, h - inset), sw * 0.9f)
+                drawLine(color, Offset(inset, h * 0.68f), Offset(w - inset, h * 0.68f), sw * 0.9f)
             }
 
             MainNavTab.TIMETABLE -> {
-                // Calendar with binder rings + a today dot
-                val w = size.width
-                val h = size.height
-                val strokeW = w * 0.085f
-                val bodyTop = h * 0.16f
-
+                // Calendar: frame, header band, binder rings, day dots
                 drawRoundRect(
                     color = color,
-                    topLeft = Offset(0f, bodyTop),
-                    size = Size(w, h - bodyTop),
-                    cornerRadius = CornerRadius(w * 0.2f, w * 0.2f),
-                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                    topLeft = Offset(inset, inset),
+                    size = Size(w - sw, h - sw),
+                    cornerRadius = CornerRadius(r, r),
+                    style = stroke
                 )
-                drawLine(color, Offset(w * 0.3f, 0f), Offset(w * 0.3f, h * 0.24f), strokeW, StrokeCap.Round)
-                drawLine(color, Offset(w * 0.7f, 0f), Offset(w * 0.7f, h * 0.24f), strokeW, StrokeCap.Round)
-                drawLine(color, Offset(0f, h * 0.42f), Offset(w, h * 0.42f), strokeW)
-                drawCircle(color, radius = w * 0.1f, center = Offset(w * 0.3f, h * 0.68f))
-                drawLine(color, Offset(w * 0.48f, h * 0.68f), Offset(w * 0.8f, h * 0.68f), strokeW, StrokeCap.Round)
+                drawLine(color, Offset(inset, h * 0.36f), Offset(w - inset, h * 0.36f), sw * 0.9f)
+                drawLine(color, Offset(w * 0.32f, 0f), Offset(w * 0.32f, h * 0.20f), sw, StrokeCap.Round)
+                drawLine(color, Offset(w * 0.68f, 0f), Offset(w * 0.68f, h * 0.20f), sw, StrokeCap.Round)
+                listOf(0.28f, 0.50f, 0.72f).forEach { x ->
+                    drawCircle(color, radius = sw * 0.6f, center = Offset(w * x, h * 0.60f))
+                }
             }
 
             MainNavTab.PROFILE -> {
-                // Profile silhouette: head circle + shoulder curve
-                val w = size.width
-                val h = size.height
-                val strokeW = w * 0.09f
-
-                // Head
+                // Person: head circle + shoulders
                 drawCircle(
                     color = color,
-                    radius = w * 0.22f,
-                    center = Offset(w * 0.5f, h * 0.28f),
-                    style = Stroke(width = strokeW)
+                    radius = w * 0.19f,
+                    center = Offset(w * 0.5f, h * 0.30f),
+                    style = Stroke(width = sw)
                 )
-
-                // Shoulders
-                val path = Path().apply {
-                    moveTo(w * 0.14f, h * 0.90f)
-                    quadraticTo(w * 0.16f, h * 0.62f, w * 0.5f, h * 0.62f)
-                    quadraticTo(w * 0.84f, h * 0.62f, w * 0.86f, h * 0.90f)
+                val shoulders = Path().apply {
+                    moveTo(w * 0.16f, h * 0.88f)
+                    quadraticTo(w * 0.17f, h * 0.60f, w * 0.5f, h * 0.60f)
+                    quadraticTo(w * 0.83f, h * 0.60f, w * 0.84f, h * 0.88f)
                 }
-                drawPath(path = path, color = color, style = Stroke(width = strokeW, cap = StrokeCap.Round))
+                drawPath(shoulders, color, style = stroke)
             }
         }
     }

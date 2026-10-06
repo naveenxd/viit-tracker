@@ -270,6 +270,38 @@ data class Simulated(
     val meetsTarget: Boolean,
 )
 
+// ---- academic register (day-by-day matrix) ----
+
+/** One historical day-cell for a subject in the register matrix. */
+@Serializable
+data class RegisterDayLog(
+    val date: String,
+    val status: String,          // e.g. "P", "PP", "AA", "-"
+    val held: Int = 0,
+    val attended: Int = 0,
+    val absent: Int = 0,
+)
+
+/** Cumulative per-subject numbers across the register matrix. */
+@Serializable
+data class RegisterSubjectLog(
+    val subject: String,
+    val held: Int = 0,
+    val attended: Int = 0,
+    val absent: Int = 0,
+    val periods: Int = 0,
+    val log: List<RegisterDayLog> = emptyList(),
+)
+
+/** Full academic-register matrix — POST /api/attendance/register. */
+@Serializable
+data class AttendanceRegisterResponse(
+    val datesTracked: List<String> = emptyList(),
+    val latestDate: String = "",
+    val subjects: List<RegisterSubjectLog> = emptyList(),
+    val todayBadges: List<Badge> = emptyList(),
+)
+
 val AppJson = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
