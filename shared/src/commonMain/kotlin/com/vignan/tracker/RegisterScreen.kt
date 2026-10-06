@@ -381,7 +381,9 @@ private fun RegisterSubjectChip(subject: String, status: String) {
 private val RAW_SUBJECT_COL_W = 108.dp
 private val RAW_ROW_H = 34.dp
 private val RAW_HEADER_H = 42.dp
-private val RAW_MIN_CELL_W = 40.dp
+// Floor width: enough for the "DD/MM" column header, the widest thing a narrow
+// column must show. Tokens wider than this stretch the whole column.
+private val RAW_MIN_CELL_W = 36.dp
 
 /**
  * The untouched matrix: a fixed subject column on the left, dates scrolling
@@ -389,8 +391,9 @@ private val RAW_MIN_CELL_W = 40.dp
  * so only the visible columns are ever composed — a long semester no longer
  * builds the entire grid on switch.
  *
- * Column width is derived from the longest P/A token in the data (a run such as
- * "PPP" is wider than "P"), never a hard-coded width that would clip a token.
+ * Width is per COLUMN, not global: a date whose longest token is "PPP" grows,
+ * a date of bare "P"s stays at the header floor. Cells in a column must share a
+ * width or the rows would misalign, so the column takes its widest token.
  */
 @Composable
 private fun RegisterRawView(register: AttendanceRegisterResponse) {
@@ -402,16 +405,16 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
         subjects.associate { s -> s.subject to s.log.associate { it.date to it.status } }
     }
 
-    // Widest token the matrix actually contains — drives every column's width so
-    // long P/A runs show in full and all rows stay aligned.
-    val maxTokenLen = remember(register) {
-        subjects.flatMap { it.log }
-            .map { it.status.trim().length }
-            .maxOrNull()?.coerceAtLeast(1) ?: 1
-    }
-    val cellWidth = RAW_MIN_CELL_W.let { min ->
-        val estimated = (maxTokenLen * 7).dp + 12.dp
-        if (estimated > min) estimated else min
+    // Per-column width from that date's widest token, floored to the header.
+    // Short days stay narrow instead of every column paying the global max.
+    val columnWidths = remember(register) {
+        dates.associateWith { date ->
+            val widest = subjects.maxOfOrNull { s ->
+                cellLookup[s.subject]?.get(date)?.trim()?.length ?: 0
+            } ?: 0
+            val estimated = (widest * 7).dp + 12.dp
+            if (estimated > RAW_MIN_CELL_W) estimated else RAW_MIN_CELL_W
+        }
     }
 
     Column(
@@ -504,7 +507,8 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
                 contentPadding = PaddingValues(end = 12.dp)
             ) {
                 items(dates, key = { it }) { date ->
-                    Column(modifier = Modifier.width(cellWidth)) {
+                    val columnWidth = columnWidths[date] ?: RAW_MIN_CELL_W
+                    Column(modifier = Modifier.width(columnWidth)) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -524,7 +528,7 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
                         subjects.forEach { subject ->
                             RawStatusCell(
                                 status = cellLookup[subject.subject]?.get(date) ?: "-",
-                                width = cellWidth
+                                width = columnWidth
                             )
                         }
                     }
