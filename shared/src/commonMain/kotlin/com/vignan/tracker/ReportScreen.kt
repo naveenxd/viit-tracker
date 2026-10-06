@@ -1,5 +1,11 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -34,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,12 +49,12 @@ import kotlinx.coroutines.launch
 
 /** Range selector modes, top to bottom on the screen. */
 private enum class ReportMode(val label: String) {
-    PER_MONTH("PER MONTH"),
+    PER_MONTH("MONTH"),
     TILL_NOW("TILL NOW"),
     FROM_TO("FROM - TO")
 }
 
-/** Month choices for the PER MONTH dropdown: value = "MM" (as the portal expects). */
+/** Month choices for the MONTH dropdown: value = "MM" (as the portal expects). */
 private val MONTH_OPTIONS: List<Pair<String, String>> = listOf(
     "01" to "January",
     "02" to "February",
@@ -65,7 +71,7 @@ private val MONTH_OPTIONS: List<Pair<String, String>> = listOf(
 )
 
 /**
- * Attendance report screen (portal ATTENDANCE REPORT / ShowAttendance):
+ * Attendance screen (portal ATTENDANCE REPORT / ShowAttendance):
  * per-month breakdown, semester-to-date, or an arbitrary from-to range.
  */
 @Composable
@@ -102,7 +108,7 @@ fun ReportScreen() {
             val result = repository.fetchAttendanceReport(fromDate = from, toDate = to)
             result.fold(
                 onSuccess = { report = it },
-                onFailure = { error = it.message?.ifBlank { null } ?: "Could not load the report." }
+                onFailure = { error = it.message?.ifBlank { null } ?: "Could not load the attendance." }
             )
             isReportLoading = false
         }
@@ -111,11 +117,9 @@ fun ReportScreen() {
     fun loadForMode() {
         when (selectedMode) {
             ReportMode.PER_MONTH -> {
-                // Portal wants the range as DD/MM/YYYY. A whole month is requested by
-                // passing only the first day — the backend defaults the end of range.
-                val mm = month.padStart(2, '0')
-                val yyyy = year.padStart(4, '0')
-                load("01/$mm/$yyyy", null, "${monthName(mm)} $yyyy")
+                // A whole month is requested by passing only its first day — the
+                // backend fills in the end of the range, so no toDate is sent.
+                load("01/$month/$year", null, "${monthName(month)} $year")
             }
             // Semester to date: neither date is needed, just omit both.
             ReportMode.TILL_NOW -> load(null, null, "semester to date")
@@ -147,75 +151,94 @@ fun ReportScreen() {
     // Initial load: the current month is preselected.
     LaunchedEffect(Unit) { loadForMode() }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // ── Mode selector ────────────────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            ReportMode.entries.forEach { mode ->
-                val selected = mode == selectedMode
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (selected) TrackerColors.PrimaryWhite else TrackerColors.SurfaceDark)
-                        .border(
-                            1.dp,
-                            if (selected) TrackerColors.PrimaryWhite else TrackerColors.HairlineBorder,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { selectMode(mode) }
-                        .padding(vertical = 9.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = mode.label,
-                        color = if (selected) TrackerColors.PureBlack else TrackerColors.TextMuted,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.6.sp,
-                        maxLines = 1
-                    )
-                }
-            }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ReportHeader()
+
+        ReportModeSelector(selected = selectedMode, onSelect = { selectMode(it) })
+
+        // ── Range panel ──────────────────────────────────────────────────
+        val pendingRange = when (selectedMode) {
+            ReportMode.PER_MONTH -> "01/$month/$year"
+            ReportMode.TILL_NOW -> "SEMESTER → TODAY"
+            ReportMode.FROM_TO -> if (fromDate.isBlank() || toDate.isBlank()) "PICK A RANGE" else "$fromDate  →  $toDate"
         }
 
-        // ── Inputs per mode ──────────────────────────────────────────────
-        when (selectedMode) {
-            ReportMode.PER_MONTH -> {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReportDropdownField(
-                        label = "MONTH",
-                        value = month,
-                        displayValue = monthName(month),
-                        options = monthOptions,
-                        onSelect = { month = it },
-                        modifier = Modifier.weight(1.15f)
-                    )
-                    ReportDropdownField(
-                        label = "YEAR",
-                        value = year,
-                        displayValue = year,
-                        options = yearOptions.map { it to it },
-                        onSelect = { year = it },
-                        modifier = Modifier.weight(0.85f)
-                    )
-                    FetchReportButton(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(TrackerColors.SurfaceDark)
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "RANGE",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.2.sp
+                )
+                Text(
+                    text = pendingRange,
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            when (selectedMode) {
+                ReportMode.PER_MONTH -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReportDropdownField(
+                            label = "MONTH",
+                            value = month,
+                            displayValue = monthName(month),
+                            options = monthOptions,
+                            onSelect = { month = it },
+                            modifier = Modifier.weight(1.15f)
+                        )
+                        ReportDropdownField(
+                            label = "YEAR",
+                            value = year,
+                            displayValue = year,
+                            options = yearOptions.map { it to it },
+                            onSelect = { year = it },
+                            modifier = Modifier.weight(0.85f)
+                        )
+                    }
+                    ReportLoadButton(
                         enabled = !isReportLoading,
                         onClick = { loadForMode() },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-            }
-            ReportMode.TILL_NOW -> {
-                // No inputs needed; selecting this mode loads it automatically.
-            }
-            ReportMode.FROM_TO -> {
-                Spacer(modifier = Modifier.height(10.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReportMode.TILL_NOW -> {
+                    Text(
+                        text = "Every class from the start of the semester through today.",
+                        color = TrackerColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    ReportLoadButton(
+                        enabled = !isReportLoading,
+                        onClick = { loadForMode() },
+                        label = "Reload",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                ReportMode.FROM_TO -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ReportDatePickerField(
                             label = "FROM",
@@ -230,7 +253,7 @@ fun ReportScreen() {
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    FetchReportButton(
+                    ReportLoadButton(
                         enabled = !isReportLoading,
                         onClick = { loadForMode() },
                         modifier = Modifier.fillMaxWidth()
@@ -239,23 +262,10 @@ fun ReportScreen() {
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
         // ── Result ───────────────────────────────────────────────────────
         when {
-            isReportLoading -> Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    color = TrackerColors.TextMuted,
-                    strokeWidth = 2.dp
-                )
-            }
-            error != null -> ReportErrorCard(error ?: "")
+            isReportLoading -> ReportSkeleton()
+            error != null -> ReportErrorCard(error ?: "", onRetry = { loadForMode() })
             report != null && report!!.subjects.isEmpty() -> ReportEmptyCard(requestedRange)
             report != null -> ReportResultCard(report!!, requestedRange)
         }
@@ -278,7 +288,73 @@ fun ReportScreen() {
     }
 }
 
+// ---------------------------------------------------------------- header
+
+@Composable
+private fun ReportHeader() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 2.dp)
+    ) {
+        Text(
+            text = "ATTENDANCE",
+            color = TrackerColors.TextMuted,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 2.sp
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Subject-wise breakdown",
+            color = TrackerColors.TextPrimary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.SansSerif
+        )
+    }
+}
+
 // ---------------------------------------------------------------- controls
+
+/** Segmented control: one hairline container with a filled highlight for the active mode. */
+@Composable
+private fun ReportModeSelector(selected: ReportMode, onSelect: (ReportMode) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        ReportMode.entries.forEach { mode ->
+            val isSelected = mode == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(if (isSelected) TrackerColors.PrimaryWhite else Color.Transparent)
+                    .clickable { onSelect(mode) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = mode.label,
+                    color = if (isSelected) TrackerColors.PureBlack else TrackerColors.TextMuted,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.6.sp,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
 
 /** "01" → "January"; falls back to the raw value for anything unexpected. */
 private fun monthName(mm: String): String =
@@ -347,7 +423,7 @@ private fun ReportDatePickerField(
 ) {
     Row(
         modifier = modifier
-            .height(56.dp)
+            .height(52.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(TrackerColors.SurfaceInput)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
@@ -356,14 +432,7 @@ private fun ReportDatePickerField(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                color = TrackerColors.TextMuted,
-                fontSize = 9.sp,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 0.6.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
+            FieldLabel(label)
             Text(
                 text = value.ifBlank { "DD/MM/YYYY" },
                 color = if (value.isBlank()) TrackerColors.TextMuted else TrackerColors.TextPrimary,
@@ -397,7 +466,7 @@ private fun ReportDropdownField(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(52.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(TrackerColors.SurfaceInput)
                 .border(
@@ -410,14 +479,7 @@ private fun ReportDropdownField(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    color = TrackerColors.TextMuted,
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.6.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
+                FieldLabel(label)
                 Text(
                     text = displayValue,
                     color = TrackerColors.TextPrimary,
@@ -462,113 +524,258 @@ private fun ReportDropdownField(
 }
 
 @Composable
-private fun FetchReportButton(
+private fun FieldLabel(text: String) {
+    Text(
+        text = text,
+        color = TrackerColors.TextMuted,
+        fontSize = 8.sp,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        letterSpacing = 0.8.sp
+    )
+}
+
+@Composable
+private fun ReportLoadButton(
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    label: String = "Load attendance"
 ) {
     Box(
         modifier = modifier
-            .height(56.dp)
+            .height(46.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (enabled) TrackerColors.PrimaryWhite else TrackerColors.SurfaceElevated)
             .clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "Load report",
+            text = label,
             color = if (enabled) TrackerColors.PureBlack else TrackerColors.TextMuted,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.SansSerif
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.6.sp
         )
     }
 }
 
 // ---------------------------------------------------------------- results
 
+/** Status thresholds shared by the hero and the subject rows. */
+private fun statusColor(percentage: Double): Color = when {
+    percentage >= 80.0 -> TrackerColors.SafeEmerald
+    percentage >= 75.0 -> TrackerColors.WarningAmber
+    else -> TrackerColors.DangerRose
+}
+
+private fun statusLabel(percentage: Double): String = when {
+    percentage >= 80.0 -> "SAFE"
+    percentage >= 75.0 -> "WATCH"
+    else -> "LOW"
+}
+
+/** Thin rounded progress bar, animated into place. */
+@Composable
+private fun ReportProgressBar(fraction: Double, color: Color, height: Int = 6) {
+    val progress by animateFloatAsState(
+        targetValue = fraction.coerceIn(0.0, 1.0).toFloat(),
+        animationSpec = tween(600),
+        label = "reportProgress"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height.dp)
+            .clip(CircleShape)
+            .background(TrackerColors.HairlineBorder)
+    ) {
+        // fillMaxWidth(fraction) needs a positive fraction, so a 0% bar (or a
+        // still-animating 0) just leaves the empty track showing.
+        if (progress > 0.001f) {
+            Box(
+                modifier = Modifier
+                    .height(height.dp)
+                    .fillMaxWidth(progress)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+        }
+    }
+}
+
 @Composable
 private fun ReportResultCard(report: AttendanceReportResponse, rangeLabel: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Aggregate header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
-                .padding(14.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ReportSummaryCard(report, rangeLabel)
+        ReportSubjectList(report)
+    }
+}
+
+@Composable
+private fun ReportSummaryCard(report: AttendanceReportResponse, rangeLabel: String) {
+    val aggregate = report.aggregate
+    val pctColor = statusColor(aggregate.percentage)
+    val missed = (aggregate.held - aggregate.attended).coerceAtLeast(0)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "ATTENDANCE REPORT",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = rangeLabel,
-                        color = TrackerColors.TextSecondary,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                val pctColor = when {
-                    report.aggregate.percentage >= 80.0 -> TrackerColors.SafeEmerald
-                    report.aggregate.percentage >= 75.0 -> TrackerColors.WarningAmber
-                    else -> TrackerColors.DangerRose
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = formatPercentage(report.aggregate.percentage),
-                        color = pctColor,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "${report.aggregate.attended} / ${report.aggregate.held} CLASSES",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.8.sp
-                    )
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "OVERALL",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.2.sp
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = rangeLabel,
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
+            ReportStatusPill(percentage = aggregate.percentage)
         }
 
-        // Per-subject rows
-        Column(
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = formatPercentage(aggregate.percentage),
+                color = pctColor,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.Monospace
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "attendance",
+                color = TrackerColors.TextMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(bottom = 5.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ReportProgressBar(fraction = aggregate.percentage / 100.0, color = pctColor)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            ReportStat(label = "HELD", value = aggregate.held.toString(), modifier = Modifier.weight(1f))
+            ReportStat(label = "ATTENDED", value = aggregate.attended.toString(), modifier = Modifier.weight(1f))
+            ReportStat(label = "MISSED", value = missed.toString(), modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ReportStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            color = TrackerColors.TextMuted,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            color = TrackerColors.TextPrimary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
+private fun ReportStatusPill(percentage: Double) {
+    val color = statusColor(percentage)
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.14f))
+            .border(1.dp, color.copy(alpha = 0.45f), CircleShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = statusLabel(percentage),
+            color = color,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp
+        )
+    }
+}
+
+@Composable
+private fun ReportSubjectList(report: AttendanceReportResponse) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+                .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            report.subjects.forEachIndexed { index, subject ->
-                val pctColor = when {
-                    subject.percentage >= 80.0 -> TrackerColors.SafeEmerald
-                    subject.percentage >= 75.0 -> TrackerColors.WarningAmber
-                    else -> TrackerColors.DangerRose
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            Text(
+                text = "SUBJECTS",
+                color = TrackerColors.TextMuted,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.2.sp
+            )
+            Text(
+                text = report.subjects.size.toString().padStart(2, '0'),
+                color = TrackerColors.TextSubtle,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        report.subjects.forEachIndexed { index, subject ->
+            val color = statusColor(subject.percentage)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 11.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(pctColor)
+                            .background(color)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
@@ -581,39 +788,114 @@ private fun ReportResultCard(report: AttendanceReportResponse, rangeLabel: Strin
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "${subject.attended}/${subject.held}",
                         color = TrackerColors.TextSecondary,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = formatPercentage(subject.percentage),
-                        color = pctColor,
+                        color = color,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
                     )
                 }
-                if (index != report.subjects.lastIndex) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .height(1.dp)
-                            .background(TrackerColors.HairlineBorder)
+                Spacer(modifier = Modifier.height(8.dp))
+                ReportProgressBar(fraction = subject.percentage / 100.0, color = color, height = 4)
+            }
+            if (index != report.subjects.lastIndex) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .height(1.dp)
+                        .background(TrackerColors.HairlineBorder)
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- states
+
+/** Placeholder card while the attendance request is in flight. */
+@Composable
+private fun ReportSkeleton() {
+    val transition = rememberInfiniteTransition(label = "reportSkeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.30f,
+        targetValue = 0.70f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "reportSkeletonAlpha"
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(TrackerColors.SurfaceDark)
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SkeletonBar(widthFraction = 0.30f, barHeight = 10, alpha = alpha)
+            SkeletonBar(widthFraction = 0.55f, barHeight = 30, alpha = alpha)
+            SkeletonBar(widthFraction = 1f, barHeight = 6, alpha = alpha)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                repeat(3) {
+                    SkeletonBar(
+                        widthFraction = 1f,
+                        barHeight = 16,
+                        alpha = alpha,
+                        modifier = Modifier.weight(1f)
                     )
                 }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(TrackerColors.SurfaceDark)
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            for (i in 0 until 4) {
+                SkeletonBar(widthFraction = 0.85f - i * 0.12f, barHeight = 12, alpha = alpha)
             }
         }
     }
 }
 
 @Composable
-private fun ReportErrorCard(message: String) {
+private fun SkeletonBar(
+    widthFraction: Float,
+    barHeight: Int,
+    alpha: Float,
+    modifier: Modifier = Modifier
+) {
     Box(
+        modifier = modifier
+            .fillMaxWidth(widthFraction)
+            .height(barHeight.dp)
+            .clip(CircleShape)
+            .background(TrackerColors.SurfaceElevated.copy(alpha = alpha))
+    )
+}
+
+@Composable
+private fun ReportErrorCard(message: String, onRetry: () -> Unit) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -621,38 +903,43 @@ private fun ReportErrorCard(message: String) {
             .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
             .padding(14.dp)
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(TrackerColors.DangerRose)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "REPORT UNAVAILABLE",
-                    color = TrackerColors.DangerRose,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(TrackerColors.DangerRose)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = message,
-                color = TrackerColors.TextSecondary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
+                text = "COULD NOT LOAD",
+                color = TrackerColors.DangerRose,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
             )
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = message,
+            color = TrackerColors.TextSecondary,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        ReportLoadButton(
+            enabled = true,
+            onClick = onRetry,
+            label = "Try again",
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
 @Composable
 private fun ReportEmptyCard(rangeLabel: String) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -661,7 +948,16 @@ private fun ReportEmptyCard(rangeLabel: String) {
             .padding(14.dp)
     ) {
         Text(
-            text = "No attendance recorded for $rangeLabel.",
+            text = "NO CLASSES RECORDED",
+            color = TrackerColors.TextSecondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Nothing logged for $rangeLabel. Try a different range.",
             color = TrackerColors.TextMuted,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace

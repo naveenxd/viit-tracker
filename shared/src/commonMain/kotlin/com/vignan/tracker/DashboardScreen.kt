@@ -72,7 +72,7 @@ import kotlin.math.roundToInt
 
 enum class MainNavTab(val label: String) {
     HOME("HOME"),
-    REPORT("REPORT"),
+    ATTENDANCE("ATTENDANCE"),
     TIMETABLE("TIMETABLE"),
     PROFILE("PROFILE")
 }
@@ -159,7 +159,7 @@ fun DashboardScreen(
                     }
                 }
 
-                MainNavTab.REPORT -> {
+                MainNavTab.ATTENDANCE -> {
                     item {
                         ReportScreen()
                     }
@@ -1069,7 +1069,14 @@ fun ExpressiveFloatingPillNavBar(
                                 Text(
                                     text = tab.label,
                                     color = contentColor,
-                                    fontSize = 10.5.sp,
+                                    // Longer labels (ATTENDANCE, TIMETABLE) get a smaller
+                                    // size so they still fit the capsule at larger
+                                    // system font scales.
+                                    fontSize = when {
+                                        tab.label.length >= 10 -> 9.sp
+                                        tab.label.length >= 9 -> 10.sp
+                                        else -> 10.5.sp
+                                    },
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = FontFamily.SansSerif,
                                     letterSpacing = 0.5.sp,
@@ -1107,8 +1114,8 @@ private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
                 drawRoundRect(color, Offset(cell + gap, cell + gap), Size(cell, cell), r)
             }
 
-            MainNavTab.REPORT -> {
-                // Report sheet: document with title bar and list lines
+            MainNavTab.ATTENDANCE -> {
+                // Attendance sheet: document with title bar and list lines
                 val w = size.width
                 val h = size.height
                 val strokeW = w * 0.085f
