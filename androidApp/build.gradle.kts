@@ -74,6 +74,13 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // Side-by-side install: the debug package (com.vignan.tracker.debug)
+            // coexists with release, so testing builds never overwrite the real app
+            // (and vice versa — different package, no signature clash on install).
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
