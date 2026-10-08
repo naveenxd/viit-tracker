@@ -15,6 +15,11 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// CI supplies these via env (see .github/workflows/android-release.yml);
+// local/dev builds fall back to the checked defaults.
+val ciVersionCode = System.getenv("VERSION_CODE")?.trim()?.toIntOrNull()
+val ciVersionName = System.getenv("VERSION_NAME")?.trim()?.takeIf { it.isNotEmpty() }
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_11
@@ -61,8 +66,8 @@ android {
         applicationId = "com.vignan.tracker"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0"
     }
     packaging {
         resources {
@@ -103,6 +108,18 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+    // Per-ABI splits + universal APK, enabled only by CI release builds so local
+    // dev builds stay single-APK (ENABLE_ABI_SPLITS=true ./gradlew assembleRelease).
+    if (System.getenv("ENABLE_ABI_SPLITS") == "true") {
+        splits {
+            abi {
+                isEnable = true
+                reset() // drop AGP's default filter set (includes dead ABIs)
+                include("armeabi-v7a", "arm64-v8a", "x86_64")
+                isUniversalApk = true
+            }
+        }
     }
     buildFeatures {
         compose = true
