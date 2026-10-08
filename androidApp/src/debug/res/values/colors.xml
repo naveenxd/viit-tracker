@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug build only: loud amber tile instead of release's pale blue, so the
+         two installs are told apart at a glance in the launcher. -->
+    <color name="launcher_background">#FFF59E0B</color>
+</resources>
