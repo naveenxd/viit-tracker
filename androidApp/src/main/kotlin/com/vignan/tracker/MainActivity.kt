@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import com.vignan.tracker.update.UpdateOverlay
 
 class MainActivity : ComponentActivity() {
 
@@ -32,7 +33,11 @@ class MainActivity : ComponentActivity() {
         requestToastPermissionIfNeeded()
 
         setContent {
-            App()
+            TrackerTheme {
+                // In-app updater: checks for updates on every open, shows the
+                // bottom status pill and the update popup when relevant.
+                UpdateOverlay { App() }
+            }
         }
     }
 

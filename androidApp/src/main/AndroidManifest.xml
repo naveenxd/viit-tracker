@@ -9,6 +9,9 @@
          toast on the home widget is silently dropped while the widget still updates. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- In-app updater: lets the downloaded update APK be installed (API 26+). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
@@ -26,7 +29,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
+        <!-- In-app updater: exposes downloaded update APKs from cache to the
+             system package installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Attendance Widget Provider (4:2) -->
         <receiver
             android:name=".AttendanceAppWidget"
