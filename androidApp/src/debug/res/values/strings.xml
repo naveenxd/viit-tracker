@@ -1,0 +1,4 @@
+<resources>
+    <!-- Debug build only: shows a distinct launcher label next to the release app. -->
+    <string name="app_name">viit-tracker (DEBUG)</string>
+</resources>
