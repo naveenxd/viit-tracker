@@ -21,6 +21,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
+
+/** A downloaded APK plus the SHA-256 the release published for it (if any). */
+data class DownloadedApk(
+    val file: File,
+    /** Hex digest computed while streaming, used to verify the download. */
+    val sha256: String,
+)
+
+/** The download's bytes didn't match the release's published checksum. */
+class ChecksumMismatchException :
+    IOException("Downloaded APK failed SHA-256 verification")
 
 object UpdateInstaller {
 
@@ -34,18 +46,20 @@ object UpdateInstaller {
 
     /**
      * Streams the release APK into the app's cache, reporting progress in
-     * `[0f, 1f]`. Runs on [Dispatchers.IO].
+     * `[0f, 1f]` and computing its SHA-256 on the fly (no second pass over the
+     * file). Runs on [Dispatchers.IO].
      */
     suspend fun downloadApk(
         context: Context,
         url: String,
         onProgress: (Float) -> Unit,
-    ): File = withContext(Dispatchers.IO) {
+    ): DownloadedApk = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates")
         dir.mkdirs()
         dir.listFiles()?.forEach { it.delete() } // drop any partial download
 
         val target = File(dir, "update.apk")
+        val digest = MessageDigest.getInstance("SHA-256")
         client.prepareGet(url) {
             header(HttpHeaders.Accept, "application/octet-stream")
             header(HttpHeaders.UserAgent, "viit-tracker-updater")
@@ -65,6 +79,7 @@ object UpdateInstaller {
                         val read = input.read(buffer)
                         if (read < 0) break
                         out.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
                         received += read
                         if (total > 0) {
                             onProgress((received.toFloat() / total).coerceIn(0f, 1f))
@@ -77,7 +92,48 @@ object UpdateInstaller {
             throw IOException("Downloaded APK is empty")
         }
         onProgress(1f)
-        target
+        DownloadedApk(target, digest.digest().toHex())
+    }
+
+    /**
+     * Looks up [apkName]'s expected SHA-256 in the release's `SHA256SUMS.txt`.
+     * Returns `null` when the manifest can't be fetched or has no line for the
+     * APK — verification is then skipped rather than blocking the update.
+     */
+    suspend fun expectedSha256(checksumsUrl: String, apkName: String): String? =
+        withContext(Dispatchers.IO) {
+            val text = try {
+                client.prepareGet(checksumsUrl) {
+                    header(HttpHeaders.UserAgent, "viit-tracker-updater")
+                }.execute { response ->
+                    if (!response.status.isSuccess()) return@execute null
+                    response.bodyAsText()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            } ?: return@withContext null
+
+            // Lines look like "<hex>  <file name>" (sha256sum default format).
+            text.lineSequence()
+                .map { it.trim().split(Regex("\\s+")) }
+                .firstOrNull { it.size >= 2 && it.last().endsWith(apkName, ignoreCase = true) }
+                ?.first()
+                ?.lowercase()
+                ?.takeIf { hex -> hex.length == 64 && hex.all { it in "0123456789abcdef" } }
+        }
+
+    /**
+     * Verifies [apk] against [expectedSha256], deleting it on mismatch so a
+     * corrupted download can never reach the installer.
+     */
+    fun verifyChecksum(apk: DownloadedApk, expectedSha256: String?) {
+        if (expectedSha256.isNullOrBlank()) return
+        if (!apk.sha256.equals(expectedSha256.trim(), ignoreCase = true)) {
+            apk.file.delete()
+            throw ChecksumMismatchException()
+        }
     }
 
     /**
@@ -119,4 +175,7 @@ object UpdateInstaller {
             // No browser available — nothing sensible left to do.
         }
     }
+
+    private fun ByteArray.toHex(): String =
+        joinToString(separator = "") { byte -> "%02x".format(byte) }
 }
