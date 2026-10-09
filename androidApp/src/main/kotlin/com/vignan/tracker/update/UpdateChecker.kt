@@ -15,6 +15,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -25,14 +26,28 @@ private const val RELEASES_API =
     "https://api.github.com/repos/$UPDATE_REPO/releases/latest"
 private const val USER_AGENT = "viit-tracker-updater"
 
+/** How long to wait before the single retry of a failed check. */
+private const val RETRY_DELAY_MS = 600L
+
+/** Name of the checksum manifest published alongside the release APKs. */
+private const val CHECKSUMS_FILE = "SHA256SUMS.txt"
+
 /** A release the user can update to. */
 data class ReleaseInfo(
     /** Tag as published, e.g. `v1.2.0`. */
     val version: String,
-    /** Release body — shown as the changelog in the update popup. */
-    val changelog: String,
-    /** Direct URL of the preferred APK asset (universal if present), if any. */
+    /** Parsed "what's new" bullets for the update sheet; empty when none. */
+    val changelog: List<String>,
+    /** Raw release body — shown when no bullets could be parsed. */
+    val changelogRaw: String,
+    /** Direct URL of the APK chosen for this device, if any. */
     val apkUrl: String?,
+    /** File name of the chosen APK — used to find its line in SHA256SUMS.txt. */
+    val apkName: String?,
+    /** Size of the chosen APK in bytes, when GitHub reports it. */
+    val apkSizeBytes: Long?,
+    /** URL of the release's SHA256SUMS.txt manifest, when one is published. */
+    val checksumsUrl: String?,
     /** HTML release page — fallback when no APK asset is attached. */
     val notesUrl: String,
 )
@@ -44,7 +59,7 @@ sealed interface UpdateResult {
     /** Installed build is the latest release (or no releases published yet). */
     data object UpToDate : UpdateResult
 
-    /** Network/API failure — the UI stays silent instead of lying. */
+    /** Network/API failure — surfaced as a brief "couldn't check" toast. */
     data object CheckFailed : UpdateResult
 }
 
@@ -59,8 +74,9 @@ private data class GitHubRelease(
 )
 
 @Serializable
-private data class GitHubAsset(
+internal data class GitHubAsset(
     val name: String = "",
+    val size: Long = 0,
     val browser_download_url: String = "",
 )
 
@@ -77,8 +93,22 @@ object UpdateChecker {
         }
     }
 
-    /** Checks GitHub's latest release against the installed version. */
+    /**
+     * Checks GitHub's latest release against the installed version, retrying
+     * once on a transient network failure before giving up.
+     */
     suspend fun check(currentVersion: String): UpdateResult {
+        repeat(2) { attempt ->
+            when (val result = checkOnce(currentVersion)) {
+                is UpdateResult.CheckFailed ->
+                    if (attempt == 0) delay(RETRY_DELAY_MS) else return result
+                else -> return result
+            }
+        }
+        return UpdateResult.CheckFailed
+    }
+
+    private suspend fun checkOnce(currentVersion: String): UpdateResult {
         val response = try {
             client.get(RELEASES_API) {
                 header(HttpHeaders.Accept, "application/vnd.github+json")
@@ -105,22 +135,60 @@ object UpdateChecker {
         if (release.draft || release.prerelease) return UpdateResult.UpToDate
         if (!isNewer(release.tag_name, currentVersion)) return UpdateResult.UpToDate
 
-        val apk = release.assets
-            .filter { it.name.endsWith(".apk", ignoreCase = true) }
-            .let { assets ->
-                // Universal APK installs on every device; prefer it over ABI splits.
-                assets.firstOrNull { it.name.contains("universal", ignoreCase = true) }
-                    ?: assets.firstOrNull()
-            }
+        val apk = pickApkForDevice(release.assets)
+        val checksums = release.assets.firstOrNull {
+            it.name.equals(CHECKSUMS_FILE, ignoreCase = true)
+        }
 
         return UpdateResult.Available(
             ReleaseInfo(
                 version = release.tag_name,
-                changelog = release.body?.trim().orEmpty(),
+                changelog = parseChangelog(release.body.orEmpty()),
+                changelogRaw = release.body?.trim().orEmpty(),
                 apkUrl = apk?.browser_download_url,
+                apkName = apk?.name,
+                apkSizeBytes = apk?.size?.takeIf { it > 0 },
+                checksumsUrl = checksums?.browser_download_url,
                 notesUrl = release.html_url,
             )
         )
+    }
+
+    /**
+     * Picks the APK to install, best match first:
+     *
+     * 1. the split built for one of this device's ABIs (a few times smaller
+     *    than the universal build),
+     * 2. the universal APK (installs everywhere),
+     * 3. any attached APK as a last resort.
+     */
+    internal fun pickApkForDevice(assets: List<GitHubAsset>): GitHubAsset? {
+        val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+        if (apks.isEmpty()) return null
+        // SUPPORTED_ABIS is ordered most-specific-first (e.g. arm64 before armeabi).
+        for (abi in Build.SUPPORTED_ABIS) {
+            apks.firstOrNull { it.name.contains(abi, ignoreCase = true) }?.let { return it }
+        }
+        return apks.firstOrNull { it.name.contains("universal", ignoreCase = true) }
+            ?: apks.first()
+    }
+
+    /**
+     * Parses a GitHub release body into "what's new" bullets. Prefers explicit
+     * `- ` / `* ` list items; otherwise falls back to non-empty lines with
+     * markdown heading markers stripped. Empty when there's nothing to show.
+     */
+    internal fun parseChangelog(raw: String): List<String> {
+        val bullets = raw.lines()
+            .map { it.trim() }
+            .filter { it.startsWith("- ") || it.startsWith("* ") }
+            .map { it.substring(2).trim() }
+            .filter { it.isNotBlank() }
+        if (bullets.isNotEmpty()) return bullets
+
+        return raw.lines()
+            .map { it.trim().trimStart('#').trim() }
+            .filter { it.isNotBlank() }
     }
 
     /**
