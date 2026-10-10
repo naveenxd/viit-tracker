@@ -95,11 +95,11 @@ fun UpdateOverlay(
     val localVersion = remember { UpdateChecker.currentVersionName(context) }
 
     var toast by remember { mutableStateOf<ToastState?>(ToastState.Checking) }
-    var available by remember { mutableStateOf<ReleaseInfo?>(null) }
+    var available by remember { mutableStateOf<UpdateInfo?>(null) }
 
     // Update check on every open (fresh composition per activity launch).
     LaunchedEffect(Unit) {
-        when (val result = UpdateChecker.check(localVersion)) {
+        when (val result = UpdateChecker.check(context)) {
             is UpdateResult.Available -> {
                 toast = null
                 available = result.info
@@ -213,7 +213,7 @@ private fun StatusToast(state: ToastState) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UpdateSheet(
-    info: ReleaseInfo,
+    info: UpdateInfo,
     localVersion: String,
     onDismiss: () -> Unit,
 ) {
@@ -227,7 +227,7 @@ private fun UpdateSheet(
 
     val startDownload = {
         val url = info.apkUrl
-        if (url != null) {
+        if (url.isNotBlank()) {
             phase = SheetPhase.Downloading
             progress = 0f
             downloaded = null
@@ -236,12 +236,7 @@ private fun UpdateSheet(
                     val apk = UpdateInstaller
                         .downloadApk(context, url) { progress = it }
                     phase = SheetPhase.Verifying
-                    val expected = info.checksumsUrl?.let { sums ->
-                        info.apkName?.let { name ->
-                            UpdateInstaller.expectedSha256(sums, name)
-                        }
-                    }
-                    UpdateInstaller.verifyChecksum(apk, expected)
+                    UpdateInstaller.verifyChecksum(apk, info.apkSha256)
                     downloaded = apk.file
                     phase = SheetPhase.Ready
                     UpdateInstaller.install(context, apk.file, info.notesUrl)
@@ -268,11 +263,13 @@ private fun UpdateSheet(
 
     ModalBottomSheet(
         onDismissRequest = {
-            // Dismissing mid-download cancels it, mirai-style.
-            if (phase == SheetPhase.Downloading || phase == SheetPhase.Verifying) {
-                downloadJob?.cancel()
+            // Forced updates stay up; a normal dismiss mid-download cancels it.
+            if (!info.forceUpdate) {
+                if (phase == SheetPhase.Downloading || phase == SheetPhase.Verifying) {
+                    downloadJob?.cancel()
+                }
+                onDismiss()
             }
-            onDismiss()
         },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Color.Transparent,
@@ -320,7 +317,11 @@ private fun UpdateSheet(
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = "Update available",
+                            text = if (info.forceUpdate) {
+                                "Update required"
+                            } else {
+                                "Update available"
+                            },
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TrackerColors.TextPrimary,
@@ -330,7 +331,7 @@ private fun UpdateSheet(
                 }
 
                 // ── What's new ──
-                if (info.changelog.isNotEmpty() || info.changelogRaw.isNotBlank()) {
+                if (info.changelog.isNotEmpty()) {
                     Spacer(Modifier.height(18.dp))
                     Text(
                         text = "WHAT'S NEW",
@@ -345,16 +346,7 @@ private fun UpdateSheet(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
-                        if (info.changelog.isNotEmpty()) {
-                            info.changelog.forEach { item -> ChangelogBullet(item) }
-                        } else {
-                            Text(
-                                text = info.changelogRaw,
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp,
-                                color = TrackerColors.TextSecondary,
-                            )
-                        }
+                        info.changelog.forEach { item -> ChangelogBullet(item) }
                     }
                 }
 
@@ -363,12 +355,12 @@ private fun UpdateSheet(
                 // ── Action area ──
                 when (phase) {
                     SheetPhase.Idle -> UpdateButton(
-                        label = if (info.apkUrl == null) {
+                        label = if (info.apkUrl.isBlank()) {
                             "Open in browser"
                         } else {
                             "Download update"
                         },
-                        withDownloadGlyph = info.apkUrl != null,
+                        withDownloadGlyph = info.apkUrl.isNotBlank(),
                         onClick = startDownload,
                     )
 
@@ -399,20 +391,23 @@ private fun UpdateSheet(
                             trackColor = TrackerColors.HairlineBorder,
                             gapSize = 0.dp,
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TrackerColors.TextMuted,
-                                modifier = Modifier
-                                    .clickable(onClick = cancelDownload)
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                            )
+                        // Forced updates keep running — no escape hatch.
+                        if (!info.forceUpdate) {
+                            Spacer(Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Cancel",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TrackerColors.TextMuted,
+                                    modifier = Modifier
+                                        .clickable(onClick = cancelDownload)
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                )
+                            }
                         }
                     }
 
@@ -488,7 +483,7 @@ private fun rememberLauncherIcon(): ImageBitmap? {
 
 /** `v1.0 → v1.1 · 38 MB` — where you are, where you're going, what it costs. */
 @Composable
-private fun VersionBadge(info: ReleaseInfo, localVersion: String) {
+private fun VersionBadge(info: UpdateInfo, localVersion: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = "v$localVersion",
@@ -506,13 +501,6 @@ private fun VersionBadge(info: ReleaseInfo, localVersion: String) {
             fontWeight = FontWeight.Bold,
             color = TrackerColors.PrimaryWhite,
         )
-        info.apkSizeBytes?.let { bytes ->
-            Text(
-                text = "  ·  ${formatMegabytes(bytes)}",
-                fontSize = 12.sp,
-                color = TrackerColors.TextMuted,
-            )
-        }
     }
 }
 
@@ -605,7 +593,4 @@ private fun DownloadGlyph(modifier: Modifier, color: Color) {
     }
 }
 
-private fun formatMegabytes(bytes: Long): String {
-    val mb = bytes / (1024.0 * 1024.0)
-    return if (mb >= 10) "%.0f MB".format(mb) else "%.1f MB".format(mb)
-}
+
