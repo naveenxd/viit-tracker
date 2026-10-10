@@ -11,7 +11,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
@@ -19,66 +18,101 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** GitHub repo whose releases drive the in-app updater. */
-const val UPDATE_REPO = "naveenxd/viit-tracker"
+/**
+ * Update manifest, served straight from the repo's `main` via
+ * raw.githubusercontent.com's CDN — no api.github.com calls, so no rate
+ * limits. Maintained by tool/release/generate_version_json.py on every
+ * tag release (see .github/workflows/android-release.yml).
+ */
+private const val MANIFEST_URL =
+    "https://raw.githubusercontent.com/naveenxd/viit-tracker/main/version.json"
 
-private const val RELEASES_API =
-    "https://api.github.com/repos/$UPDATE_REPO/releases/latest"
+/** Host of the GitHub releases that carry the APK assets. */
+private const val RELEASES_HOST = "https://github.com/naveenxd/viit-tracker"
+
 private const val USER_AGENT = "viit-tracker-updater"
 
-/** How long to wait before the single retry of a failed check. */
+/** How long to wait before the single retry of a failed fetch. */
 private const val RETRY_DELAY_MS = 600L
 
-/** Name of the checksum manifest published alongside the release APKs. */
-private const val CHECKSUMS_FILE = "SHA256SUMS.txt"
-
-/** A release the user can update to. */
-data class ReleaseInfo(
-    /** Tag as published, e.g. `v1.2.0`. */
+/** A release the user can update to, resolved for this device. */
+data class UpdateInfo(
+    /** Published version, e.g. `1.2.0` — shown in the sheet. */
     val version: String,
-    /** Parsed "what's new" bullets for the update sheet; empty when none. */
+    /** versionCode of the APK built for this device (comparison base). */
+    val build: Long,
+    /** "What's new" bullets for the update sheet. */
     val changelog: List<String>,
-    /** Raw release body — shown when no bullets could be parsed. */
-    val changelogRaw: String,
-    /** Direct URL of the APK chosen for this device, if any. */
-    val apkUrl: String?,
-    /** File name of the chosen APK — used to find its line in SHA256SUMS.txt. */
-    val apkName: String?,
-    /** Size of the chosen APK in bytes, when GitHub reports it. */
-    val apkSizeBytes: Long?,
-    /** URL of the release's SHA256SUMS.txt manifest, when one is published. */
-    val checksumsUrl: String?,
-    /** HTML release page — fallback when no APK asset is attached. */
+    /** Download URL of the APK for this device's ABI. */
+    val apkUrl: String,
+    /** Hex SHA-256 the release published for this APK, when known. */
+    val apkSha256: String?,
+    /** When set, the sheet can't be dismissed (mirai-style forced update). */
+    val forceUpdate: Boolean,
+    /** HTML release page — fallback when no APK URL is published. */
     val notesUrl: String,
 )
 
 sealed interface UpdateResult {
-    /** A newer release exists on GitHub. */
-    data class Available(val info: ReleaseInfo) : UpdateResult
+    /** The manifest lists a newer build than the installed one. */
+    data class Available(val info: UpdateInfo) : UpdateResult
 
-    /** Installed build is the latest release (or no releases published yet). */
+    /** Installed build is the published latest (or a newer dev build). */
     data object UpToDate : UpdateResult
 
-    /** Network/API failure — surfaced as a brief "couldn't check" toast. */
+    /** Network/manifest failure — surfaced as a brief "couldn't check" toast. */
     data object CheckFailed : UpdateResult
 }
 
+/**
+ * Manifest schema (mirrors mirai's version.json). Unknown keys are ignored
+ * so the manifest can grow without breaking shipped clients:
+ *
+ * ```json
+ * {
+ *   "latest_version": "1.1.0",
+ *   "latest_build": 64,                    // max per-APK versionCode
+ *   "apk_build": 63,                       // universal APK's versionCode
+ *   "apk_url": ".../viit-tracker-1.1.0.apk",
+ *   "apk_urls":  { "arm64-v8a": "...", "armeabi-v7a": "...", "x86_64": "..." },
+ *   "apk_builds": { "arm64-v8a": 64, ... },
+ *   "sha256":    { "arm64-v8a": "<hex>", ... },
+ *   "changelog": ["bullet", "..."],
+ *   "force_update": false,
+ *   "history": [ { "version": "...", "build": 1, "changelog": [] } ]
+ * }
+ * ```
+ */
 @Serializable
-private data class GitHubRelease(
-    val tag_name: String = "",
-    val html_url: String = "",
-    val body: String? = null,
-    val draft: Boolean = false,
-    val prerelease: Boolean = false,
-    val assets: List<GitHubAsset> = emptyList(),
+internal data class UpdateManifest(
+    val latest_version: String = "",
+    val latest_build: Long = 0,
+    val apk_build: Long = 0,
+    val apk_url: String = "",
+    val apk_urls: Map<String, String> = emptyMap(),
+    val apk_builds: Map<String, Long> = emptyMap(),
+    val sha256: Map<String, String> = emptyMap(),
+    val changelog: List<String> = emptyList(),
+    val force_update: Boolean = false,
 )
 
-@Serializable
-internal data class GitHubAsset(
-    val name: String = "",
-    val size: Long = 0,
-    val browser_download_url: String = "",
-)
+internal fun UpdateManifest.resolveFor(abi: String?): UpdateInfo {
+    // Prefer the split built for this device's primary ABI; fall back to the
+    // universal APK (installs everywhere). The sha256 map is keyed the same
+    // way — real ABI names plus "universal".
+    val useSplit = abi != null && apk_urls.containsKey(abi)
+    val urlKey = if (useSplit) abi else null
+    return UpdateInfo(
+        version = latest_version,
+        build = (urlKey?.let { apk_builds[it] } ?: apk_build)
+            .takeIf { it > 0 } ?: latest_build,
+        changelog = changelog,
+        apkUrl = (urlKey?.let { apk_urls[it] }).takeIf { !it.isNullOrBlank() } ?: apk_url,
+        apkSha256 = sha256[urlKey ?: "universal"],
+        forceUpdate = force_update,
+        notesUrl = "$RELEASES_HOST/releases/tag/v$latest_version",
+    )
+}
 
 object UpdateChecker {
 
@@ -94,12 +128,12 @@ object UpdateChecker {
     }
 
     /**
-     * Checks GitHub's latest release against the installed version, retrying
-     * once on a transient network failure before giving up.
+     * Fetches the update manifest, retrying once on a transient network
+     * failure before giving up.
      */
-    suspend fun check(currentVersion: String): UpdateResult {
+    suspend fun check(context: Context): UpdateResult {
         repeat(2) { attempt ->
-            when (val result = checkOnce(currentVersion)) {
+            when (val result = checkOnce(context)) {
                 is UpdateResult.CheckFailed ->
                     if (attempt == 0) delay(RETRY_DELAY_MS) else return result
                 else -> return result
@@ -108,11 +142,13 @@ object UpdateChecker {
         return UpdateResult.CheckFailed
     }
 
-    private suspend fun checkOnce(currentVersion: String): UpdateResult {
+    private suspend fun checkOnce(context: Context): UpdateResult {
         val response = try {
-            client.get(RELEASES_API) {
-                header(HttpHeaders.Accept, "application/vnd.github+json")
+            // Cache-bust so the CDN can't hand us a stale manifest after a release.
+            client.get("$MANIFEST_URL?_=${System.currentTimeMillis()}") {
                 header(HttpHeaders.UserAgent, USER_AGENT)
+                header(HttpHeaders.CacheControl, "no-cache")
+                header("Pragma", "no-cache")
             }
         } catch (e: CancellationException) {
             throw e
@@ -120,99 +156,49 @@ object UpdateChecker {
             return UpdateResult.CheckFailed
         }
 
-        // No releases published yet — nothing to update to.
-        if (response.status == HttpStatusCode.NotFound) return UpdateResult.UpToDate
         if (!response.status.isSuccess()) return UpdateResult.CheckFailed
 
-        val release = try {
-            response.body<GitHubRelease>()
+        val manifest = try {
+            response.body<UpdateManifest>()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             return UpdateResult.CheckFailed
         }
 
-        if (release.draft || release.prerelease) return UpdateResult.UpToDate
-        if (!isNewer(release.tag_name, currentVersion)) return UpdateResult.UpToDate
+        val abi = Build.SUPPORTED_ABIS.firstOrNull()
+        val info = manifest.resolveFor(abi)
 
-        val apk = pickApkForDevice(release.assets)
-        val checksums = release.assets.firstOrNull {
-            it.name.equals(CHECKSUMS_FILE, ignoreCase = true)
-        }
+        // Missing/blank APK URL → nothing actionable to install.
+        if (info.apkUrl.isBlank()) return UpdateResult.CheckFailed
+        if (info.build <= currentBuildCode(context)) return UpdateResult.UpToDate
 
-        return UpdateResult.Available(
-            ReleaseInfo(
-                version = release.tag_name,
-                changelog = parseChangelog(release.body.orEmpty()),
-                changelogRaw = release.body?.trim().orEmpty(),
-                apkUrl = apk?.browser_download_url,
-                apkName = apk?.name,
-                apkSizeBytes = apk?.size?.takeIf { it > 0 },
-                checksumsUrl = checksums?.browser_download_url,
-                notesUrl = release.html_url,
-            )
-        )
+        return UpdateResult.Available(info)
     }
 
     /**
-     * Picks the APK to install, best match first:
-     *
-     * 1. the split built for one of this device's ABIs (a few times smaller
-     *    than the universal build),
-     * 2. the universal APK (installs everywhere),
-     * 3. any attached APK as a last resort.
+     * Installed versionCode. The CI release pipeline stamps every split APK
+     * with the run number (AGP adds a small per-ABI offset on top), and the
+     * manifest publishes each APK's *actual* code — so this comparison is
+     * exact per install flavor, no offset math on either side.
      */
-    internal fun pickApkForDevice(assets: List<GitHubAsset>): GitHubAsset? {
-        val apks = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
-        if (apks.isEmpty()) return null
-        // SUPPORTED_ABIS is ordered most-specific-first (e.g. arm64 before armeabi).
-        for (abi in Build.SUPPORTED_ABIS) {
-            apks.firstOrNull { it.name.contains(abi, ignoreCase = true) }?.let { return it }
+    fun currentBuildCode(context: Context): Long {
+        val pm = context.packageManager
+        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.getPackageInfo(context.packageName, 0)
         }
-        return apks.firstOrNull { it.name.contains("universal", ignoreCase = true) }
-            ?: apks.first()
-    }
-
-    /**
-     * Parses a GitHub release body into "what's new" bullets. Prefers explicit
-     * `- ` / `* ` list items; otherwise falls back to non-empty lines with
-     * markdown heading markers stripped. Empty when there's nothing to show.
-     */
-    internal fun parseChangelog(raw: String): List<String> {
-        val bullets = raw.lines()
-            .map { it.trim() }
-            .filter { it.startsWith("- ") || it.startsWith("* ") }
-            .map { it.substring(2).trim() }
-            .filter { it.isNotBlank() }
-        if (bullets.isNotEmpty()) return bullets
-
-        return raw.lines()
-            .map { it.trim().trimStart('#').trim() }
-            .filter { it.isNotBlank() }
-    }
-
-    /**
-     * True when [remote] (e.g. `v1.2.0`) is a strictly higher version than
-     * [local] (e.g. `1.0`, `1.0-debug`). Non-numeric suffixes are ignored so
-     * dev/CI builds like `1.0-dev.12` compare sanely.
-     */
-    internal fun isNewer(remote: String, local: String): Boolean {
-        val r = parseVersion(remote)
-        val l = parseVersion(local)
-        for (i in 0 until maxOf(r.size, l.size)) {
-            val rv = r.getOrElse(i) { 0 }
-            val lv = l.getOrElse(i) { 0 }
-            if (rv != lv) return rv > lv
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
         }
-        return false
     }
 
-    private fun parseVersion(raw: String): List<Int> =
-        raw.removePrefix("v")
-            .split('.')
-            .map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }
-
-    /** Installed versionName, read from PackageManager (no BuildConfig needed). */
+    /** Installed versionName — display only (badge, "you have X"). */
     fun currentVersionName(context: Context): String {
         val pm = context.packageManager
         val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

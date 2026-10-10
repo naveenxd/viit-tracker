@@ -96,37 +96,9 @@ object UpdateInstaller {
     }
 
     /**
-     * Looks up [apkName]'s expected SHA-256 in the release's `SHA256SUMS.txt`.
-     * Returns `null` when the manifest can't be fetched or has no line for the
-     * APK — verification is then skipped rather than blocking the update.
-     */
-    suspend fun expectedSha256(checksumsUrl: String, apkName: String): String? =
-        withContext(Dispatchers.IO) {
-            val text = try {
-                client.prepareGet(checksumsUrl) {
-                    header(HttpHeaders.UserAgent, "viit-tracker-updater")
-                }.execute { response ->
-                    if (!response.status.isSuccess()) return@execute null
-                    response.bodyAsText()
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                null
-            } ?: return@withContext null
-
-            // Lines look like "<hex>  <file name>" (sha256sum default format).
-            text.lineSequence()
-                .map { it.trim().split(Regex("\\s+")) }
-                .firstOrNull { it.size >= 2 && it.last().endsWith(apkName, ignoreCase = true) }
-                ?.first()
-                ?.lowercase()
-                ?.takeIf { hex -> hex.length == 64 && hex.all { it in "0123456789abcdef" } }
-        }
-
-    /**
-     * Verifies [apk] against [expectedSha256], deleting it on mismatch so a
-     * corrupted download can never reach the installer.
+     * Verifies [apk] against [expectedSha256] (from the update manifest),
+     * deleting it on mismatch so a corrupted download can never reach the
+     * installer.
      */
     fun verifyChecksum(apk: DownloadedApk, expectedSha256: String?) {
         if (expectedSha256.isNullOrBlank()) return
