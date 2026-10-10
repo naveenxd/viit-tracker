@@ -2,8 +2,10 @@ name: Build & release APKs
 
 # How to trigger:
 #   - push a version tag:   git tag v1.1.0 && git push origin v1.1.0
-#     -> builds universal + per-ABI release APKs and publishes them on a
-#        GitHub Release for that tag (release notes = in-app changelog).
+#     -> builds universal + per-ABI release APKs, publishes them on a GitHub
+#        Release for that tag, then updates version.json on main — the app's
+#        in-app updater reads that manifest via raw.githubusercontent.com
+#        (CDN, no api rate limits; see tool/release/generate_version_json.py).
 #   - or run it manually from the Actions tab (workflow_dispatch) — uploads
 #     the APKs as workflow artifacts instead of creating a release.
 #
@@ -11,6 +13,9 @@ name: Build & release APKs
 #   KEYSTORE_BAS64   (base64 of your .jks:  base64 -w0 path/to/release.jks)
 #   KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
 # Without them the workflow still builds, debug-signed (fine for testing only).
+#
+# Optional: changelog/<version>.md — bullets shown in the in-app update sheet
+# (falls back to "Release <version>" when missing).
 
 on:
   push:
@@ -72,27 +77,72 @@ jobs:
           ENABLE_ABI_SPLITS: "true"
         run: ./gradlew :androidApp:assembleRelease
 
-      - name: Generate SHA-256 checksums
-        # The in-app updater downloads SHA256SUMS.txt and verifies the APK
-        # before handing it to the system installer (see UpdateInstaller.kt).
+      - name: Rename APKs to release naming
+        id: naming
         run: |
-          cd androidApp/build/outputs/apk/release
-          sha256sum *.apk > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.name }}"
+          OUT=androidApp/build/outputs/apk/release
+          mv "$OUT/androidApp-universal-release.apk" "$OUT/viit-tracker-$VERSION.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ -f "$OUT/androidApp-$abi-release.apk" ]; then
+              mv "$OUT/androidApp-$abi-release.apk" "$OUT/viit-tracker-$VERSION-$abi.apk"
+            fi
+          done
+          ls -lh "$OUT"/*.apk
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: apk-${{ github.run_number }}
-          path: |
-            androidApp/build/outputs/apk/release/*.apk
-            androidApp/build/outputs/apk/release/SHA256SUMS.txt
+          path: androidApp/build/outputs/apk/release/*.apk
 
-      - name: Publish GitHub Release with APKs + auto-generated notes
+      - name: Publish GitHub Release with APKs
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: |
-            androidApp/build/outputs/apk/release/*.apk
-            androidApp/build/outputs/apk/release/SHA256SUMS.txt
+          files: androidApp/build/outputs/apk/release/*.apk
+
+      # The updater's manifest: version.json on main, fetched by the app via
+      # raw.githubusercontent.com. Runs AFTER the asset publish so the APK
+      # URLs in the manifest already resolve.
+      - name: Generate version.json and push to main
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.name }}"
+          TAG="${{ github.ref_name }}"
+          OUT=androidApp/build/outputs/apk/release
+
+          rm -rf /tmp/tracker-releases
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            /tmp/tracker-releases
+
+          SPLIT_ARGS=()
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            [ -f "$OUT/viit-tracker-$VERSION-$abi.apk" ] && \
+              SPLIT_ARGS+=(--split "$abi=$OUT/viit-tracker-$VERSION-$abi.apk")
+          done
+
+          python3 "$GITHUB_WORKSPACE/tool/release/generate_version_json.py" \
+            --tag "$TAG" \
+            --universal-apk "$OUT/viit-tracker-$VERSION.apk" \
+            "${SPLIT_ARGS[@]}" \
+            --changelog "$GITHUB_WORKSPACE/changelog/$VERSION.md" \
+            --existing /tmp/tracker-releases/version.json \
+            --out /tmp/tracker-releases/version.json
+
+          cd /tmp/tracker-releases
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          if git diff --cached --quiet; then
+            echo "version.json unchanged — nothing to push."
+          else
+            git commit -m "release $TAG: update version.json"
+            git push
+          fi
