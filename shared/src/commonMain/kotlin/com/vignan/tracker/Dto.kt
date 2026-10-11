@@ -290,6 +290,11 @@ data class RegisterSubjectLog(
     val attended: Int = 0,
     val absent: Int = 0,
     val periods: Int = 0,
+    /** Portal-printed totals, e.g. "32/34". The API also sends a duplicate
+     *  "attedHeld" key; it is ignored and this canonical one is used. */
+    val attendedHeld: String = "",
+    /** Cumulative percentage for the subject, e.g. 94.12. */
+    val percentage: Double = 0.0,
     val log: List<RegisterDayLog> = emptyList(),
 )
 
