@@ -42,11 +42,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** How the register matrix is presented. */
 private enum class RegisterView(val label: String) {
@@ -385,6 +387,10 @@ private val RAW_HEADER_H = 42.dp
 // Floor width: enough for the "DD/MM" column header, the widest thing a narrow
 // column must show. Tokens wider than this stretch the whole column.
 private val RAW_MIN_CELL_W = 36.dp
+// Pinned totals columns, sized for their widest values at 10.sp mono:
+// "100/100" and "100.00" plus cell padding.
+private val RAW_TOTALS_COL_W = 54.dp
+private val RAW_PCT_COL_W = 48.dp
 
 /**
  * The untouched matrix: a fixed subject column on the left, dates scrolling
@@ -395,6 +401,10 @@ private val RAW_MIN_CELL_W = 36.dp
  * Width is per COLUMN, not global: a date whose longest token is "PPP" grows,
  * a date of bare "P"s stays at the header floor. Cells in a column must share a
  * width or the rows would misalign, so the column takes its widest token.
+ *
+ * The per-subject totals the portal now ships (attended/held + percentage)
+ * render as two pinned columns on the right — they stay put while the date
+ * columns scroll underneath, same as the frozen subject column on the left.
  */
 @Composable
 private fun RegisterRawView(register: AttendanceRegisterResponse) {
@@ -505,8 +515,12 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
 
             // Scrolling grid: one LazyRow item per date, each holding that day's
             // header plus a cell for every subject. Only visible dates compose.
+            // weight(1f): flexes into whatever width remains after the fixed
+            // columns (subject, totals, %) are measured, so nothing gets squeezed.
             LazyRow(
-                modifier = Modifier.height(RAW_HEADER_H + RAW_ROW_H * subjects.size),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(RAW_HEADER_H + RAW_ROW_H * subjects.size),
                 contentPadding = PaddingValues(end = 12.dp)
             ) {
                 items(dates, key = { it }) { date ->
@@ -537,10 +551,99 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
                     }
                 }
             }
+
+            // Hairline divider between the scrolling grid and the pinned totals.
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(RAW_HEADER_H + RAW_ROW_H * subjects.size)
+                    .background(TrackerColors.HairlineBorder)
+            )
+
+            // Pinned ATTED/HELD column — the portal-printed "32/34" per subject.
+            RawTotalsColumn(
+                header = "ATTED/\nHELD",
+                width = RAW_TOTALS_COL_W,
+                subjects = subjects
+            ) { subject ->
+                subject.attendedHeld.ifBlank { "${subject.attended}/${subject.held}" }
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(RAW_HEADER_H + RAW_ROW_H * subjects.size)
+                    .background(TrackerColors.HairlineBorder)
+            )
+
+            // Pinned percentage column — fixed 2-decimal portal style.
+            RawTotalsColumn(
+                header = "%",
+                width = RAW_PCT_COL_W,
+                subjects = subjects
+            ) { subject ->
+                fixedTwoDecimals(subject.percentage)
+            }
         }
 
         Spacer(modifier = Modifier.height(96.dp))
     }
+}
+
+/**
+ * A pinned (non-scrolling) matrix column: header plus one centered value per
+ * subject, sharing the grid's row metrics so the rows stay aligned.
+ */
+@Composable
+private fun RawTotalsColumn(
+    header: String,
+    width: Dp,
+    subjects: List<RegisterSubjectLog>,
+    value: (RegisterSubjectLog) -> String
+) {
+    Column(modifier = Modifier.width(width)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(RAW_HEADER_H),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = header,
+                color = TrackerColors.TextMuted,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2
+            )
+        }
+        subjects.forEach { subject ->
+            Box(
+                modifier = Modifier
+                    .width(width)
+                    .height(RAW_ROW_H),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = value(subject),
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+/** Portal-style fixed 2-decimal percent: 77.777 → "77.78", 100.0 → "100.00". */
+private fun fixedTwoDecimals(value: Double): String {
+    val hundredths = (value * 100).roundToInt()
+    return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
 }
 
 /** One matrix cell: a P/A token tinted by outcome; "–" for no class that day. */
