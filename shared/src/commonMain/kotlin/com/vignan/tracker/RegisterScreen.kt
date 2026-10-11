@@ -71,6 +71,22 @@ private object RegisterCache {
 }
 
 /**
+ * Register layout preferences, kept for the process lifetime.
+ *
+ * Deliberately has no on-screen control yet: a future Settings screen flips
+ * these directly. Snapshot state, so every reader recomposes when they change.
+ */
+internal object RegisterPreferences {
+    /**
+     * Where the per-subject totals columns (ATTED/HELD and %) live in the RAW
+     * matrix. false (default): appended as the LAST columns of the horizontal
+     * scroll, after the final date. true: pinned to the right edge while the
+     * date columns scroll underneath.
+     */
+    var totalsPinned by mutableStateOf(false)
+}
+
+/**
  * Academic register screen — the full day-by-day attendance matrix.
  *
  * PARSED: one card per recorded day, listing every subject with its P/A token.
@@ -400,8 +416,8 @@ private val RAW_HEADER_H = 42.dp
 // column must show. Tokens wider than this stretch the whole column.
 private val RAW_MIN_CELL_W = 36.dp
 // Totals columns (ATTED/HELD and %), sized for their widest values at 10.sp
-// mono: "100/100" and "100.00" plus cell padding. They trail at the end of
-// the horizontal scroll, after the last date.
+// mono: "100/100" and "100.00" plus cell padding. They trail at the end of the
+// scroll by default, or pin right via RegisterPreferences.totalsPinned.
 private val RAW_TOTALS_COL_W = 54.dp
 private val RAW_PCT_COL_W = 48.dp
 
@@ -416,8 +432,11 @@ private val RAW_PCT_COL_W = 48.dp
  * width or the rows would misalign, so the column takes its widest token.
  *
  * The per-subject totals the portal now ships (attended/held + percentage)
- * are the last two columns of the scroll — past the final date rather than
- * pinned to the right edge.
+ * default to the END of the scroll — two more columns after the last date.
+ * RegisterPreferences.totalsPinned flips them to pinned columns on the right
+ * (they then stay put while the dates scroll underneath, same as the frozen
+ * subject column on the left).
+ *
  * Vertically the whole matrix scrolls inside the card: a student with many
  * subjects would otherwise overflow the screen.
  */
@@ -426,6 +445,8 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
     val dates = register.datesTracked
     val subjects = register.subjects
 
+    // Totals placement (settings-driven); read here so flipping it recomposes.
+    val totalsPinned = RegisterPreferences.totalsPinned
     // Full grid height: header row plus one row per subject.
     val gridHeight = RAW_HEADER_H + RAW_ROW_H * subjects.size
 
@@ -536,8 +557,9 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
 
             // Scrolling grid: one LazyRow item per date, each holding that day's
             // header plus a cell for every subject. Only visible dates compose.
-            // weight(1f): flexes into whatever width remains after the frozen
-            // subject column is measured, so nothing gets squeezed.
+            // weight(1f): flexes into whatever width remains after the fixed
+            // columns (subject, plus the totals when pinned) are measured, so
+            // nothing gets squeezed.
             LazyRow(
                 modifier = Modifier
                     .weight(1f)
@@ -572,43 +594,80 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
                     }
                 }
 
-                // Totals are the last two columns of the scroll: after the last
-                // date, separated by the same hairlines as the old pinned layout.
-                item(key = "atted-held") {
-                    Row(modifier = Modifier.height(gridHeight)) {
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(gridHeight)
-                                .background(TrackerColors.HairlineBorder)
-                        )
-                        // ATTED/HELD — the portal-printed "32/34" per subject.
-                        RawTotalsColumn(
-                            header = "ATTED/\nHELD",
-                            width = RAW_TOTALS_COL_W,
-                            subjects = subjects
-                        ) { subject ->
-                            subject.attendedHeld.ifBlank { "${subject.attended}/${subject.held}" }
+                // Totals trail the scroll by default: after the last date,
+                // separated by the same hairlines as the pinned layout.
+                if (!totalsPinned) {
+                    item(key = "atted-held") {
+                        Row(modifier = Modifier.height(gridHeight)) {
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(gridHeight)
+                                    .background(TrackerColors.HairlineBorder)
+                            )
+                            // ATTED/HELD — the portal-printed "32/34" per subject.
+                            RawTotalsColumn(
+                                header = "ATTED/\nHELD",
+                                width = RAW_TOTALS_COL_W,
+                                subjects = subjects
+                            ) { subject ->
+                                subject.attendedHeld.ifBlank { "${subject.attended}/${subject.held}" }
+                            }
+                        }
+                    }
+                    item(key = "percent") {
+                        Row(modifier = Modifier.height(gridHeight)) {
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(gridHeight)
+                                    .background(TrackerColors.HairlineBorder)
+                            )
+                            // Trailing percentage column — fixed 2-decimal portal style.
+                            RawTotalsColumn(
+                                header = "%",
+                                width = RAW_PCT_COL_W,
+                                subjects = subjects
+                            ) { subject ->
+                                fixedTwoDecimals(subject.percentage)
+                            }
                         }
                     }
                 }
-                item(key = "percent") {
-                    Row(modifier = Modifier.height(gridHeight)) {
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(gridHeight)
-                                .background(TrackerColors.HairlineBorder)
-                        )
-                        // Trailing percentage column — fixed 2-decimal portal style.
-                        RawTotalsColumn(
-                            header = "%",
-                            width = RAW_PCT_COL_W,
-                            subjects = subjects
-                        ) { subject ->
-                            fixedTwoDecimals(subject.percentage)
-                        }
-                    }
+            }
+
+            if (totalsPinned) {
+                // Hairline divider between the scrolling grid and the pinned totals.
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(gridHeight)
+                        .background(TrackerColors.HairlineBorder)
+                )
+
+                // Pinned ATTED/HELD column — the portal-printed "32/34" per subject.
+                RawTotalsColumn(
+                    header = "ATTED/\nHELD",
+                    width = RAW_TOTALS_COL_W,
+                    subjects = subjects
+                ) { subject ->
+                    subject.attendedHeld.ifBlank { "${subject.attended}/${subject.held}" }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(gridHeight)
+                        .background(TrackerColors.HairlineBorder)
+                )
+
+                // Pinned percentage column — fixed 2-decimal portal style.
+                RawTotalsColumn(
+                    header = "%",
+                    width = RAW_PCT_COL_W,
+                    subjects = subjects
+                ) { subject ->
+                    fixedTwoDecimals(subject.percentage)
                 }
             }
         }
@@ -618,8 +677,8 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
 }
 
 /**
- * A non-scrolling matrix column: header plus one centered value per subject,
- * sharing the grid's row metrics so the rows stay aligned.
+ * A pinned (non-scrolling) matrix column: header plus one centered value per
+ * subject, sharing the grid's row metrics so the rows stay aligned.
  */
 @Composable
 private fun RawTotalsColumn(
