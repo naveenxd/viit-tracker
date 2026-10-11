@@ -26,8 +26,10 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -129,12 +131,22 @@ fun RegisterScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        when {
-            isLoading && register == null -> RegisterSkeleton()
-            error != null -> RegisterErrorCard(error ?: "", onRetry = { load() })
-            register == null || register!!.datesTracked.isEmpty() -> RegisterEmptyCard()
-            view == RegisterView.PARSED -> RegisterParsedView(register!!)
-            else -> RegisterRawView(register!!)
+        // weight(1f): the views own exactly the height the header leaves over.
+        // Measured against the full screen instead (plain fillMaxSize Column
+        // child), their bottoms sit below the fold and the matrix could not
+        // scroll the hidden rows into view.
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            when {
+                isLoading && register == null -> RegisterSkeleton()
+                error != null -> RegisterErrorCard(error ?: "", onRetry = { load() })
+                register == null || register!!.datesTracked.isEmpty() -> RegisterEmptyCard()
+                view == RegisterView.PARSED -> RegisterParsedView(register!!)
+                else -> RegisterRawView(register!!)
+            }
         }
     }
 }
@@ -405,6 +417,8 @@ private val RAW_PCT_COL_W = 48.dp
  * The per-subject totals the portal now ships (attended/held + percentage)
  * render as two pinned columns on the right — they stay put while the date
  * columns scroll underneath, same as the frozen subject column on the left.
+ * Vertically the whole matrix scrolls inside the card: a student with many
+ * subjects would otherwise overflow the screen.
  */
 @Composable
 private fun RegisterRawView(register: AttendanceRegisterResponse) {
@@ -431,6 +445,9 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Vertical scroll: many subjects push rows past the bottom of the
+            // card, so the whole matrix (header row included) scrolls up.
+            .verticalScroll(rememberScrollState())
             .padding(start = 16.dp, end = 16.dp)
     ) {
         Row(
