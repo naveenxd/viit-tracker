@@ -1021,7 +1021,7 @@ fun ExpressiveFloatingPillNavBar(
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffset)
-                        .size(width = tabWidth, height = 38.dp)
+                        .size(width = tabWidth, height = 42.dp)
                         .clip(CircleShape)
                         .background(TrackerColors.SurfaceElevated)
                         .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
@@ -1047,7 +1047,7 @@ fun ExpressiveFloatingPillNavBar(
                         Box(
                             modifier = Modifier
                                 .width(tabWidth)
-                                .height(38.dp)
+                                .height(42.dp)
                                 .clip(CircleShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
@@ -1094,9 +1094,9 @@ fun ExpressiveFloatingPillNavBar(
                                     // size so they still fit the capsule at larger
                                     // system font scales.
                                     fontSize = when {
-                                        tab.label.length >= 10 -> 9.sp
-                                        tab.label.length >= 9 -> 10.sp
-                                        else -> 10.5.sp
+                                        tab.label.length >= 10 -> 9.5.sp
+                                        tab.label.length >= 9 -> 10.5.sp
+                                        else -> 11.sp
                                     },
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = FontFamily.SansSerif,
@@ -1118,7 +1118,7 @@ fun ExpressiveFloatingPillNavBar(
 private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
     Canvas(
         modifier = Modifier
-            .size(18.dp)
+            .size(20.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
