@@ -134,14 +134,15 @@ class ApiClient(
     }
 
     /** Portal ATTENDANCE REPORT (ShowAttendance) for an optional date range. */
-    suspend fun attendanceReport(creds: CredentialsRequest, fromDate: String? = null, toDate: String? = null): AttendanceReportResponse {
+    suspend fun attendanceReport(creds: CredentialsRequest, fromDate: String? = null, toDate: String? = null, excludeOthers: Boolean = false): AttendanceReportResponse {
         val body = AppJson.encodeToString(
             AttendanceReportRequest.serializer(),
             AttendanceReportRequest(
                 rollNo = creds.rollNo,
                 password = creds.password,
                 fromDate = fromDate?.takeIf { it.isNotBlank() },
-                toDate = toDate?.takeIf { it.isNotBlank() }
+                toDate = toDate?.takeIf { it.isNotBlank() },
+                excludeOthers = excludeOthers
             )
         )
         val response = post("/api/attendance/report", body)

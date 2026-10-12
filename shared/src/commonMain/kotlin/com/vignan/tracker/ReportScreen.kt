@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,6 +95,7 @@ fun ReportScreen() {
     var toDate by remember { mutableStateOf("") }   // DD/MM/YYYY
     var showFromPicker by remember { mutableStateOf(false) }
     var showToPicker by remember { mutableStateOf(false) }
+    var excludeOthers by remember { mutableStateOf(false) }
 
     var isReportLoading by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf<AttendanceReportResponse?>(null) }
@@ -105,7 +107,7 @@ fun ReportScreen() {
         error = null
         requestedRange = rangeLabel
         scope.launch {
-            val result = repository.fetchAttendanceReport(fromDate = from, toDate = to)
+            val result = repository.fetchAttendanceReport(fromDate = from, toDate = to, excludeOthers = excludeOthers)
             result.fold(
                 onSuccess = { report = it },
                 onFailure = { error = it.message?.ifBlank { null } ?: "Could not load the attendance." }
@@ -257,6 +259,38 @@ fun ReportScreen() {
                         enabled = !isReportLoading,
                         onClick = { loadForMode() },
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            val excludeInteraction = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = excludeInteraction,
+                        indication = null
+                    ) { excludeOthers = !excludeOthers }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CleanCheckbox(
+                    checked = excludeOthers,
+                    onCheckedChange = { excludeOthers = it }
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Exclude others",
+                        color = TrackerColors.TextSecondary,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                    Text(
+                        text = "Drop subjects outside your core set",
+                        color = TrackerColors.TextSubtle,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }

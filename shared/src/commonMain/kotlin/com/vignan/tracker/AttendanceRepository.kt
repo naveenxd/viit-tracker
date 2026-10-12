@@ -91,10 +91,10 @@ class AttendanceRepository(
      * Portal ATTENDANCE REPORT for a date range. Dates are DD/MM/YYYY strings
      * exactly as the portal expects them; nulls mean "semester to date".
      */
-    suspend fun fetchAttendanceReport(fromDate: String? = null, toDate: String? = null): Result<AttendanceReportResponse> {
+    suspend fun fetchAttendanceReport(fromDate: String? = null, toDate: String? = null, excludeOthers: Boolean = false): Result<AttendanceReportResponse> {
         val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
         return try {
-            Result.success(api.attendanceReport(CredentialsRequest(creds.rollNo, creds.password), fromDate, toDate))
+            Result.success(api.attendanceReport(CredentialsRequest(creds.rollNo, creds.password), fromDate, toDate, excludeOthers))
         } catch (e: Throwable) {
             Result.failure(e)
         }

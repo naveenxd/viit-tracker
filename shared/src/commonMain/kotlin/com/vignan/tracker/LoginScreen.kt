@@ -340,7 +340,7 @@ fun LoginScreen(
 // ---------------------------------------------------------------- Clean Checkbox
 
 @Composable
-private fun CleanCheckbox(
+internal fun CleanCheckbox(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
