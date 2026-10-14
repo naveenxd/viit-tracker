@@ -88,252 +88,281 @@ fun LoginScreen(
     ) {
         Spacer(modifier = Modifier.height(80.dp))
 
-        // Wordmark
-        Text(
-            text = "VIIT",
-            color = TrackerColors.TextPrimary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 4.sp
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = "Attendance Tracker",
-            color = TrackerColors.TextMuted,
-            fontSize = 13.sp,
-            fontFamily = FontFamily.SansSerif
-        )
-
-        Spacer(modifier = Modifier.height(52.dp))
-
-        // Inline Error
-        if (!errorMessage.isNullOrBlank()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(TrackerColors.DangerRoseSubtle)
-                    .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(5.dp)
-                        .clip(CircleShape)
-                        .background(TrackerColors.DangerRose)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = errorMessage,
-                    color = TrackerColors.TextSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.SansSerif
-                )
-            }
-            Spacer(modifier = Modifier.height(28.dp))
-        }
-
-        // Roll Number
-        Text(
-            text = "Registration number",
-            color = TrackerColors.TextMuted,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.SansSerif,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        OutlinedTextField(
-            value = rollNumber,
-            onValueChange = { onRollNumberChange(it.uppercase().trim()) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            trailingIcon = {
-                if (rollNumber.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { onRollNumberChange("") }
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "✕", color = TrackerColors.TextMuted, fontSize = 12.sp)
-                    }
-                }
-            },
-            placeholder = {
-                Text(
-                    text = "e.g. 22B91A0501",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            },
-            textStyle = TextStyle(
+        // Wordmark lockup
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "VIIT",
+                color = TrackerColors.TextPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = TrackerColors.TextPrimary
-            ),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = TrackerColors.SurfaceInput,
-                unfocusedContainerColor = TrackerColors.SurfaceInput,
-                focusedBorderColor = TrackerColors.BorderFocused,
-                unfocusedBorderColor = TrackerColors.HairlineBorder,
-                focusedTextColor = TrackerColors.TextPrimary,
-                unfocusedTextColor = TrackerColors.TextPrimary,
-                cursorColor = TrackerColors.TextPrimary
-            ),
-            shape = RoundedCornerShape(8.dp),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Ascii,
-                imeAction = ImeAction.Next
-            ),
-            keyboardActions = KeyboardActions(
-                onNext = { passwordFocusRequester.requestFocus() }
+                letterSpacing = 5.sp
             )
-        )
-
-        Spacer(modifier = Modifier.height(22.dp))
-
-        // Password
-        Text(
-            text = "Password",
-            color = TrackerColors.TextMuted,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.SansSerif,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        OutlinedTextField(
-            value = password,
-            onValueChange = onPasswordChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(passwordFocusRequester),
-            singleLine = true,
-            placeholder = {
-                Text(
-                    text = "Portal password",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.SansSerif
-                )
-            },
-            textStyle = TextStyle(
-                fontFamily = FontFamily.SansSerif,
-                fontSize = 14.sp,
-                color = TrackerColors.TextPrimary
-            ),
-            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onTogglePasswordVisibility() }
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AnimatedEyeIcon(
-                        isVisible = isPasswordVisible,
-                        color = if (isPasswordVisible) TrackerColors.TextSecondary else TrackerColors.TextMuted
-                    )
-                }
-            },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = TrackerColors.SurfaceInput,
-                unfocusedContainerColor = TrackerColors.SurfaceInput,
-                focusedBorderColor = TrackerColors.BorderFocused,
-                unfocusedBorderColor = TrackerColors.HairlineBorder,
-                focusedTextColor = TrackerColors.TextPrimary,
-                unfocusedTextColor = TrackerColors.TextPrimary,
-                cursorColor = TrackerColors.TextPrimary
-            ),
-            shape = RoundedCornerShape(8.dp),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(onDone = {
-                focusManager.clearFocus()
-                onSubmit()
-            })
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Keep Me Logged In
-        val interactionSource = remember { MutableInteractionSource() }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null
-                ) { onRememberMeChange(!rememberMe) }
-                .padding(vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CleanCheckbox(
-                checked = rememberMe,
-                onCheckedChange = onRememberMeChange
+            Spacer(modifier = Modifier.width(10.dp))
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(15.dp)
+                    .background(TrackerColors.HairlineBorderLight)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = "Keep me signed in",
-                color = TrackerColors.TextMuted,
-                fontSize = 13.sp,
-                fontFamily = FontFamily.SansSerif
+                text = "tracker",
+                color = TrackerColors.TextSubtle,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.SansSerif,
+                modifier = Modifier.padding(bottom = 1.dp)
             )
         }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "ATTENDANCE PORTAL",
+            color = TrackerColors.TextMuted,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 2.sp
+        )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(34.dp))
 
-        // Sign In Button
-        Button(
-            onClick = {
-                focusManager.clearFocus()
-                onSubmit()
-            },
-            enabled = !isLoading,
+        // Sign-in form, on a hairline card to match the rest of the app
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = TrackerColors.PrimaryWhite,
-                contentColor = TrackerColors.PureBlack,
-                disabledContainerColor = TrackerColors.SurfaceElevated,
-                disabledContentColor = TrackerColors.TextMuted
-            )
+                .clip(RoundedCornerShape(12.dp))
+                .background(TrackerColors.SurfaceDark)
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(15.dp),
-                    color = TrackerColors.PureBlack,
-                    strokeWidth = 2.dp
+            // Inline Error
+            if (!errorMessage.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(TrackerColors.DangerRoseSubtle)
+                        .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(TrackerColors.DangerRose)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = errorMessage,
+                        color = TrackerColors.TextSecondary,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                }
+            }
+
+            // Roll Number
+            AuthField(
+                label = "REGISTRATION NUMBER",
+                value = rollNumber,
+                onValueChange = { onRollNumberChange(it.uppercase().trim()) },
+                placeholder = "e.g. 22B91A0501",
+                textStyle = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TrackerColors.TextPrimary
+                ),
+                trailing = {
+                    if (rollNumber.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { onRollNumberChange("") }
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "✕", color = TrackerColors.TextMuted, fontSize = 12.sp)
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Ascii,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { passwordFocusRequester.requestFocus() }
+                )
+            )
+
+            // Password
+            AuthField(
+                label = "PASSWORD",
+                value = password,
+                onValueChange = onPasswordChange,
+                placeholder = "Portal password",
+                modifier = Modifier.focusRequester(passwordFocusRequester),
+                textStyle = TextStyle(
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 14.sp,
+                    color = TrackerColors.TextPrimary
+                ),
+                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailing = {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onTogglePasswordVisibility() }
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedEyeIcon(
+                            isVisible = isPasswordVisible,
+                            color = if (isPasswordVisible) TrackerColors.TextSecondary else TrackerColors.TextMuted
+                        )
+                    }
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus()
+                    onSubmit()
+                })
+            )
+
+            // Keep Me Logged In
+            val interactionSource = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) { onRememberMeChange(!rememberMe) }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CleanCheckbox(
+                    checked = rememberMe,
+                    onCheckedChange = onRememberMeChange
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Signing in…",
-                    color = TrackerColors.PureBlack,
+                    text = "Keep me signed in",
+                    color = TrackerColors.TextMuted,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.SansSerif
                 )
-            } else {
-                Text(
-                    text = "Sign in",
-                    color = TrackerColors.PureBlack,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.SansSerif
+            }
+
+            // Sign In Button
+            Button(
+                onClick = {
+                    focusManager.clearFocus()
+                    onSubmit()
+                },
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TrackerColors.PrimaryWhite,
+                    contentColor = TrackerColors.PureBlack,
+                    disabledContainerColor = TrackerColors.SurfaceElevated,
+                    disabledContentColor = TrackerColors.TextMuted
                 )
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(15.dp),
+                        color = TrackerColors.PureBlack,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Signing in…",
+                        color = TrackerColors.PureBlack,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                } else {
+                    Text(
+                        text = "Sign in",
+                        color = TrackerColors.PureBlack,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(36.dp))
         FooterBadge()
         Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+// ---------------------------------------------------------------- Auth Field
+
+@Composable
+private fun AuthField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    textStyle: TextStyle,
+    trailing: (@Composable () -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            color = TrackerColors.TextMuted,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.8.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            trailingIcon = trailing,
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
+            },
+            textStyle = textStyle,
+            visualTransformation = visualTransformation,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = TrackerColors.SurfaceInput,
+                unfocusedContainerColor = TrackerColors.SurfaceInput,
+                focusedBorderColor = TrackerColors.BorderFocused,
+                unfocusedBorderColor = TrackerColors.HairlineBorder,
+                focusedTextColor = TrackerColors.TextPrimary,
+                unfocusedTextColor = TrackerColors.TextPrimary,
+                cursorColor = TrackerColors.TextPrimary
+            ),
+            shape = RoundedCornerShape(8.dp),
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions
+        )
     }
 }
 
