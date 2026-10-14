@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -585,6 +586,8 @@ private fun FeesAndConductSection(
     onRefresh: () -> Unit,
     onLogout: () -> Unit
 ) {
+    var showSignOutConfirm by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // --- 1. Fee Balance Summary Banner ---
         val totalDue = fees?.totalDue?.takeIf { it.isNotBlank() } ?: "00.00"
@@ -837,7 +840,7 @@ private fun FeesAndConductSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onLogout() }
+                    .clickable { showSignOutConfirm = true }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -851,6 +854,102 @@ private fun FeesAndConductSection(
             }
         }
     }
+
+    if (showSignOutConfirm) {
+        SignOutConfirmDialog(
+            onDismiss = { showSignOutConfirm = false },
+            onConfirm = {
+                showSignOutConfirm = false
+                onLogout()
+            }
+        )
+    }
+}
+
+// ============================================================================
+// SIGN OUT CONFIRMATION
+// ============================================================================
+
+@Composable
+private fun SignOutConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = TrackerColors.SurfaceDark,
+        titleContentColor = TrackerColors.TextPrimary,
+        textContentColor = TrackerColors.TextSecondary,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp)),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(TrackerColors.DangerRose)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "SIGN OUT",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+            }
+        },
+        text = {
+            Text(
+                text = "You'll need your registration number and password to sign back in. Sign out of this account?",
+                fontSize = 12.sp,
+                color = TrackerColors.TextSecondary,
+                fontFamily = FontFamily.SansSerif,
+                lineHeight = 18.sp
+            )
+        },
+        confirmButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(TrackerColors.DangerRoseSubtle)
+                    .border(
+                        1.dp,
+                        TrackerColors.DangerRose.copy(alpha = 0.5f),
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable { onConfirm() }
+                    .padding(horizontal = 16.dp, vertical = 9.dp)
+            ) {
+                Text(
+                    text = "SIGN OUT",
+                    color = TrackerColors.DangerRose,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.6.sp
+                )
+            }
+        },
+        dismissButton = {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onDismiss() }
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
+            ) {
+                Text(
+                    text = "CANCEL",
+                    color = TrackerColors.TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.6.sp
+                )
+            }
+        }
+    )
 }
 
 // ============================================================================
