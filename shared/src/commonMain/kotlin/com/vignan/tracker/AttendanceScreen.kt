@@ -102,13 +102,16 @@ fun AttendanceScreen() {
                     onFailure = { error ->
                         val friendlyMsg = mapApiErrorToUserMessage(error)
                         if (attendanceData == null) {
+                            // Fallen back to the login screen: the inline banner
+                            // carries the message, so don't also fire a snackbar.
                             errorMessage = friendlyMsg
                             isSessionActive = false
+                        } else {
+                            snackbarHostState.showSnackbar(
+                                message = friendlyMsg,
+                                duration = SnackbarDuration.Short
+                            )
                         }
-                        snackbarHostState.showSnackbar(
-                            message = friendlyMsg,
-                            duration = SnackbarDuration.Short
-                        )
                     }
                 )
                 isLoading = false
@@ -129,7 +132,9 @@ fun AttendanceScreen() {
             return
         }
 
-        isSessionActive = true
+        // Stay on the login screen until the request resolves; only enter the
+        // dashboard once we actually have data (otherwise bad credentials flash
+        // the home screen before bouncing back to login).
         isLoading = true
         errorMessage = null
 
@@ -145,17 +150,21 @@ fun AttendanceScreen() {
                 onSuccess = { liveResp ->
                     liveAttendanceResponse = liveResp
                     attendanceData = liveResp.toAttendanceResponse()
+                    isSessionActive = true
                 },
                 onFailure = { error ->
                     val friendlyMsg = mapApiErrorToUserMessage(error)
-                    errorMessage = friendlyMsg
                     if (attendanceData == null) {
+                        // Login screen shows the inline banner; avoid the double
+                        // indicator by not also showing a snackbar here.
+                        errorMessage = friendlyMsg
                         isSessionActive = false
+                    } else {
+                        snackbarHostState.showSnackbar(
+                            message = friendlyMsg,
+                            duration = SnackbarDuration.Short
+                        )
                     }
-                    snackbarHostState.showSnackbar(
-                        message = friendlyMsg,
-                        duration = SnackbarDuration.Short
-                    )
                 }
             )
             fetchSequence++
@@ -337,8 +346,13 @@ private fun mapApiErrorToUserMessage(error: Throwable): String {
     val cause = (error as? ApiError.Network)?.cause
     println("ATTENDANCE_ERROR_DEBUG: ${error::class.simpleName}: ${error.message}, cause: ${cause?.message}")
     cause?.printStackTrace()
+    // Upstream wording that leaks internals ("fmt: no auth token generated")
+    // but really means the portal rejected the credentials.
+    if (error.message.orEmpty().contains("auth token", ignoreCase = true)) {
+        return "Invalid roll number or password."
+    }
     return when (error) {
-        is ApiError.InvalidCredentials -> if (error.message.isNotBlank()) error.message else "Wrong roll number or password."
+        is ApiError.InvalidCredentials -> "Invalid roll number or password."
         is ApiError.RateLimited -> "Too many attempts. Try again in ${error.retryAfterSec}s."
         is ApiError.Network -> "Connection error: ${cause?.message ?: cause?.toString() ?: "Unable to reach server"}"
         is ApiError.Upstream -> error.message.ifBlank { "Attendance service is unavailable." }
