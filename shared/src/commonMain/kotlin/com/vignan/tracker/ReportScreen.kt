@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +15,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +44,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -496,57 +504,84 @@ private fun ReportDropdownField(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val caretRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "reportCaretRotation"
+    )
+
     Box(modifier = modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .height(54.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(TrackerColors.SurfaceInput)
                 .border(
                     1.dp,
                     if (expanded) TrackerColors.BorderFocused else TrackerColors.HairlineBorder,
-                    RoundedCornerShape(8.dp)
+                    RoundedCornerShape(10.dp)
                 )
-                .clickable { expanded = true }
-                .padding(horizontal = 12.dp),
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { expanded = !expanded }
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 FieldLabel(label)
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = displayValue,
                     color = TrackerColors.TextPrimary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(
-                text = "▾",
-                color = TrackerColors.TextMuted,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
-            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(if (expanded) TrackerColors.SurfaceElevated else Color.Transparent)
+                    .graphicsLayer { rotationZ = caretRotation },
+                contentAlignment = Alignment.Center
+            ) {
+                CaretDown(tint = if (expanded) TrackerColors.TextSecondary else TrackerColors.TextMuted)
+            }
         }
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            containerColor = TrackerColors.SurfaceElevated
+            containerColor = TrackerColors.SurfaceElevated,
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight)
         ) {
             options.forEach { (optValue, optLabel) ->
+                val isSelected = optValue == value
                 DropdownMenuItem(
                     text = {
                         Text(
                             text = optLabel,
-                            color = if (optValue == value) TrackerColors.PrimaryWhite else TrackerColors.TextSecondary,
+                            color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextSecondary,
                             fontSize = 12.sp,
-                            fontWeight = if (optValue == value) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             fontFamily = FontFamily.Monospace
                         )
                     },
+                    leadingIcon = {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) TrackerColors.SafeEmerald else Color.Transparent)
+                        )
+                    },
+                    contentPadding = PaddingValues(horizontal = 14.dp),
                     onClick = {
                         onSelect(optValue)
                         expanded = false
@@ -554,6 +589,25 @@ private fun ReportDropdownField(
                 )
             }
         }
+    }
+}
+
+/** Small rounded chevron used as the dropdown affordance. */
+@Composable
+private fun CaretDown(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(9.dp)) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(w * 0.12f, h * 0.30f)
+            lineTo(w * 0.5f, h * 0.70f)
+            lineTo(w * 0.88f, h * 0.30f)
+        }
+        drawPath(
+            path = path,
+            color = tint,
+            style = Stroke(width = w * 0.18f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
     }
 }
 
