@@ -309,12 +309,13 @@ fun AttendanceScreen() {
                             isRefreshing = isLoading,
                             lastFetchDurationMs = lastFetchDurationMs,
                             dataVersion = fetchSequence,
-                            onFetchClick = { fetchAttendance() },
+                            onFetchClick = { if (isSessionActive) fetchAttendance() },
                             onLogout = {
                                 scope.launch { repository.logout() }
                                 isSessionActive = false
                                 liveAttendanceResponse = null
                                 attendanceData = null
+                                rollNumber = ""
                                 password = ""
                                 errorMessage = null
                             }
