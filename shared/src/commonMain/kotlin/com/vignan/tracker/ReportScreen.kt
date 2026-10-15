@@ -144,6 +144,15 @@ fun ReportScreen() {
         }
     }
 
+    /** Re-runs the current query after the exclude-others option changes. */
+    fun toggleExcludeOthers(value: Boolean) {
+        if (value == excludeOthers) return
+        excludeOthers = value
+        val canLoad = selectedMode != ReportMode.FROM_TO ||
+            (fromDate.isNotBlank() && toDate.isNotBlank())
+        if (canLoad) loadForMode()
+    }
+
     fun selectMode(mode: ReportMode) {
         if (mode == selectedMode) return
         selectedMode = mode
@@ -278,13 +287,13 @@ fun ReportScreen() {
                     .clickable(
                         interactionSource = excludeInteraction,
                         indication = null
-                    ) { excludeOthers = !excludeOthers }
+                    ) { toggleExcludeOthers(!excludeOthers) }
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CleanCheckbox(
                     checked = excludeOthers,
-                    onCheckedChange = { excludeOthers = it }
+                    onCheckedChange = { toggleExcludeOthers(it) }
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
