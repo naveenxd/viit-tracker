@@ -12,14 +12,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +56,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -513,13 +518,32 @@ private fun ReportDropdownField(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val selectedIndex = options.indexOfFirst { it.first == value }
+
+    // On open, bring the current selection into view: the list scrolls
+    // proportionally to where the selection sits, so early months show the top,
+    // later months the bottom, and the middle (Jun/Jul) lands centred.
+    LaunchedEffect(expanded, scrollState.maxValue) {
+        if (!expanded) {
+            scrollState.scrollTo(0)
+            return@LaunchedEffect
+        }
+        val max = scrollState.maxValue
+        if (max == 0) return@LaunchedEffect
+        val count = options.size
+        val target = if (count <= 1) 0 else (selectedIndex.coerceAtLeast(0) * max) / (count - 1)
+        scrollState.scrollTo(target)
+    }
+
     val caretRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
         animationSpec = tween(durationMillis = 200),
         label = "reportCaretRotation"
     )
 
-    Box(modifier = modifier) {
+    BoxWithConstraints(modifier = modifier) {
+        val menuWidth = maxWidth
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -568,34 +592,34 @@ private fun ReportDropdownField(
             onDismissRequest = { expanded = false },
             containerColor = TrackerColors.SurfaceElevated,
             shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight)
+            border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight),
+            offset = DpOffset(0.dp, 0.dp),
+            modifier = Modifier.width(menuWidth)
         ) {
-            options.forEach { (optValue, optLabel) ->
-                val isSelected = optValue == value
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = optLabel,
-                            color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    },
-                    leadingIcon = {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(if (isSelected) TrackerColors.SafeEmerald else Color.Transparent)
-                        )
-                    },
-                    contentPadding = PaddingValues(horizontal = 14.dp),
-                    onClick = {
-                        onSelect(optValue)
-                        expanded = false
-                    }
-                )
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 264.dp)
+                    .verticalScroll(scrollState)
+            ) {
+                options.forEach { (optValue, optLabel) ->
+                    val isSelected = optValue == value
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = optLabel,
+                                color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        },
+                        contentPadding = PaddingValues(horizontal = 14.dp),
+                        onClick = {
+                            onSelect(optValue)
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
     }
