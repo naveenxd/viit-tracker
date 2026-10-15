@@ -185,7 +185,7 @@ fun ReportScreen() {
 
         // ── Range panel ──────────────────────────────────────────────────
         val pendingRange = when (selectedMode) {
-            ReportMode.PER_MONTH -> "01/$month/$year"
+            ReportMode.PER_MONTH -> "${monthName(month)} $year"
             ReportMode.TILL_NOW -> "SEMESTER → TODAY"
             ReportMode.FROM_TO -> if (fromDate.isBlank() || toDate.isBlank()) "PICK A RANGE" else "$fromDate  →  $toDate"
         }
@@ -226,7 +226,6 @@ fun ReportScreen() {
                 ReportMode.PER_MONTH -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ReportDropdownField(
-                            label = "MONTH",
                             value = month,
                             displayValue = monthName(month),
                             options = monthOptions,
@@ -234,7 +233,6 @@ fun ReportScreen() {
                             modifier = Modifier.weight(1.15f)
                         )
                         ReportDropdownField(
-                            label = "YEAR",
                             value = year,
                             displayValue = year,
                             options = yearOptions.map { it to it },
@@ -264,18 +262,24 @@ fun ReportScreen() {
                 }
                 ReportMode.FROM_TO -> {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ReportDatePickerField(
-                            label = "FROM",
-                            value = fromDate,
-                            onClick = { showFromPicker = true },
-                            modifier = Modifier.weight(1f)
-                        )
-                        ReportDatePickerField(
-                            label = "TO",
-                            value = toDate,
-                            onClick = { showToPicker = true },
-                            modifier = Modifier.weight(1f)
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            FieldLabel("FROM")
+                            Spacer(modifier = Modifier.height(6.dp))
+                            ReportDatePickerField(
+                                value = fromDate,
+                                onClick = { showFromPicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            FieldLabel("TO")
+                            Spacer(modifier = Modifier.height(6.dp))
+                            ReportDatePickerField(
+                                value = toDate,
+                                onClick = { showToPicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                     ReportLoadButton(
                         enabled = !isReportLoading,
@@ -472,45 +476,43 @@ private fun ReportDatePickerDialog(
 /** Read-only date field that opens the picker instead of the keyboard. */
 @Composable
 private fun ReportDatePickerField(
-    label: String,
     value: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .height(46.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(TrackerColors.SurfaceInput)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            FieldLabel(label)
-            Text(
-                text = value.ifBlank { "DD/MM/YYYY" },
-                color = if (value.isBlank()) TrackerColors.TextMuted else TrackerColors.TextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 1
-            )
-        }
         Text(
-            text = "▾",
-            color = TrackerColors.TextMuted,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace
+            text = value.ifBlank { "DD/MM/YYYY" },
+            color = if (value.isBlank()) TrackerColors.TextMuted else TrackerColors.TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CaretDown(tint = TrackerColors.TextMuted)
+        }
     }
 }
 
 /** Tappable field that opens a dropdown of [options] (value to label). */
 @Composable
 private fun ReportDropdownField(
-    label: String,
     value: String,
     displayValue: String,
     options: List<Pair<String, String>>,
@@ -547,7 +549,7 @@ private fun ReportDropdownField(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(54.dp)
+                .height(46.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(TrackerColors.SurfaceInput)
                 .border(
@@ -562,23 +564,20 @@ private fun ReportDropdownField(
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                FieldLabel(label)
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = displayValue,
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = displayValue,
+                color = TrackerColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Box(
                 modifier = Modifier
-                    .size(22.dp)
+                    .size(20.dp)
                     .clip(CircleShape)
                     .background(if (expanded) TrackerColors.SurfaceElevated else Color.Transparent)
                     .graphicsLayer { rotationZ = caretRotation },
