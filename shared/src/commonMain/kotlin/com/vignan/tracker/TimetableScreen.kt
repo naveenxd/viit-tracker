@@ -87,8 +87,10 @@ private val DAY_LABELS = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
 private val SLOT_ROW_H = 56.dp
 private val SLOT_GAP = 6.dp
 
-private val TimetableMuted = Color(0xFF2C3548)
-private val BreakColor = Color(0xFF5B6579)
+// Muted / break accents — lifted to clear WCAG non-text contrast (>= 3:1)
+// against the near-black surfaces, so the status bar and BREAK chip stay visible.
+private val TimetableMuted = Color(0xFF5F6B85)
+private val BreakColor = Color(0xFF7C8AA6)
 
 private val SUBJECT_PALETTE = listOf(
     Color(0xFF3B7DD8), Color(0xFF4FAE6B), Color(0xFFE79A68), Color(0xFF8FB4E0),

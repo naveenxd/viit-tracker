@@ -18,13 +18,19 @@ object TrackerColors {
     val HairlineBorderLight = Color(0xFF262626)
     val BorderFocused       = Color(0xFF404040)
 
-    // Text
+    // Text — tuned for WCAG 2.1 contrast (the app is dark-mode only).
+    // Ratios measured against SurfaceElevated (#171717), the lightest surface
+    // text sits on. AA body >= 4.5:1, AAA body >= 7:1, non-text >= 3:1.
+    //   TextPrimary   ~15.3:1  (AAA)
+    //   TextSecondary  ~7.4:1  (AAA)
+    //   TextMuted      ~5.2:1  (AA)
+    //   TextSubtle     ~3.1:1  (large text / decorative only)
     val PrimaryWhite  = Color(0xFFFFFFFF)
     val PrimaryAccent = Color(0xFFFFFFFF)
     val TextPrimary   = Color(0xFFEDEDED)
-    val TextSecondary = Color(0xFF8C8C8C)
-    val TextMuted     = Color(0xFF555555)
-    val TextSubtle    = Color(0xFF383838)
+    val TextSecondary = Color(0xFFA6A6A6)
+    val TextMuted     = Color(0xFF8A8A8A)
+    val TextSubtle    = Color(0xFF666666)
 
     // Status
     val SafeEmerald        = Color(0xFF22C55E)
