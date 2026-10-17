@@ -89,7 +89,7 @@ private val MONTH_OPTIONS: List<Pair<String, String>> = listOf(
  * per-month breakdown, semester-to-date, or an arbitrary from-to range.
  */
 @Composable
-fun ReportScreen() {
+fun ReportScreen(onOpenSettings: () -> Unit = {}) {
     val repository = remember { AttendanceRepository() }
     val scope = rememberCoroutineScope()
 
@@ -175,21 +175,27 @@ fun ReportScreen() {
     // Initial load: the current month is preselected.
     LaunchedEffect(Unit) { loadForMode() }
 
+    // Currently selected range — also the header's live detail line.
+    val pendingRange = when (selectedMode) {
+        ReportMode.PER_MONTH -> "${monthName(month)} $year"
+        ReportMode.TILL_NOW -> "SEMESTER → TODAY"
+        ReportMode.FROM_TO -> if (fromDate.isBlank() || toDate.isBlank()) "PICK A RANGE" else "$fromDate  →  $toDate"
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ReportHeader()
+        ScreenHeader(
+            eyebrow = "ATTENDANCE",
+            title = "Subject-wise breakdown",
+            subtitle = pendingRange,
+            onSettingsClick = onOpenSettings
+        )
 
         ReportModeSelector(selected = selectedMode, onSelect = { selectMode(it) })
 
         // ── Range panel ──────────────────────────────────────────────────
-        val pendingRange = when (selectedMode) {
-            ReportMode.PER_MONTH -> "${monthName(month)} $year"
-            ReportMode.TILL_NOW -> "SEMESTER → TODAY"
-            ReportMode.FROM_TO -> if (fromDate.isBlank() || toDate.isBlank()) "PICK A RANGE" else "$fromDate  →  $toDate"
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -344,34 +350,6 @@ fun ReportScreen() {
             initialMillis = parseDdMmYyyyMillis(toDate),
             onDismiss = { showToPicker = false },
             onConfirm = { toDate = it }
-        )
-    }
-}
-
-// ---------------------------------------------------------------- header
-
-@Composable
-private fun ReportHeader() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp)
-    ) {
-        Text(
-            text = "ATTENDANCE",
-            color = TrackerColors.TextMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 2.sp
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Subject-wise breakdown",
-            color = TrackerColors.TextPrimary,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.SansSerif
         )
     }
 }

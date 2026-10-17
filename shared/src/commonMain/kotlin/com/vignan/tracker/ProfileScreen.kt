@@ -62,6 +62,7 @@ fun ProfileScreen(
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     onLogout: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     @Suppress("DEPRECATION")
@@ -119,6 +120,16 @@ fun ProfileScreen(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        ScreenHeader(
+            eyebrow = "PROFILE",
+            title = "Student account",
+            subtitle = listOfNotNull(
+                branch.takeIf { it.isNotBlank() && it != "—" },
+                semester.takeIf { it.isNotBlank() && it != "—" }
+            ).joinToString("  ·  ").ifBlank { rollNo },
+            onSettingsClick = onOpenSettings
+        )
+
         // ================= HERO: Sleek Student Identity Card =================
         Box(
             modifier = Modifier
@@ -871,7 +882,7 @@ private fun FeesAndConductSection(
 // ============================================================================
 
 @Composable
-private fun SignOutConfirmDialog(
+internal fun SignOutConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {

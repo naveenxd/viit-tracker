@@ -97,7 +97,10 @@ internal object RegisterPreferences {
  * spikes on a full-matrix rebuild.
  */
 @Composable
-fun RegisterScreen(modifier: Modifier = Modifier) {
+fun RegisterScreen(
+    onOpenSettings: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
     val repository = remember { AttendanceRepository() }
     val scope = rememberCoroutineScope()
 
@@ -137,10 +140,15 @@ fun RegisterScreen(modifier: Modifier = Modifier) {
                 .padding(start = 16.dp, end = 16.dp, top = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            RegisterHeader(
-                latest = register?.latestDate.orEmpty(),
-                isLoading = isLoading,
-                onReload = { load() }
+            ScreenHeader(
+                eyebrow = "REGISTER",
+                title = "Day-by-day history",
+                subtitle = register?.latestDate
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "latest entry  $it" }
+                    ?: "No entries yet",
+                onSettingsClick = onOpenSettings,
+                trailing = { RegisterReloadChip(isLoading = isLoading, onReload = { load() }) }
             )
             RegisterViewSelector(selected = view, onSelect = { view = it })
         }
@@ -169,61 +177,27 @@ fun RegisterScreen(modifier: Modifier = Modifier) {
 
 // ---------------------------------------------------------------- header
 
+/** "↻ RELOAD" chip that rides in the shared header's trailing slot. */
 @Composable
-private fun RegisterHeader(latest: String, isLoading: Boolean, onReload: () -> Unit) {
-    Column(
+private fun RegisterReloadChip(isLoading: Boolean, onReload: () -> Unit) {
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp)
+            .height(34.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(TrackerColors.SurfaceDark)
+            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(6.dp))
+            .clickable(enabled = !isLoading) { onReload() }
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "REGISTER",
-                color = TrackerColors.TextMuted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp
-            )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(TrackerColors.SurfaceDark)
-                    .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(6.dp))
-                    .clickable(enabled = !isLoading) { onReload() }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = if (isLoading) "· · ·" else "↻ RELOAD",
-                    color = if (isLoading) TrackerColors.TextMuted else TrackerColors.TextSecondary,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.6.sp
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Day-by-day history",
-            color = TrackerColors.TextPrimary,
-            fontSize = 16.sp,
+            text = if (isLoading) "· · ·" else "↻ RELOAD",
+            color = if (isLoading) TrackerColors.TextMuted else TrackerColors.TextSecondary,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.SansSerif
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.6.sp
         )
-        if (latest.isNotBlank()) {
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = "latest entry  $latest",
-                color = TrackerColors.TextSubtle,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace
-            )
-        }
     }
 }
 
