@@ -59,6 +59,8 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
             implementation(libs.androidx.security.crypto)
+            // BackHandler for the in-place settings page (commonMain expect/actual).
+            implementation(libs.androidx.activity.compose)
 
             // Ktor Engine for Android
             implementation("io.ktor:ktor-client-okhttp:2.3.12")
