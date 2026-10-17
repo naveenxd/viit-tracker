@@ -61,14 +61,35 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
     ) {
-        ScreenHeader(
-            eyebrow = "SETTINGS",
-            title = "Preferences",
-            subtitle = "Display  ·  app  ·  account",
-            action = { HeaderIconButton(onClick = onBack, contentDescription = "Close settings") { CloseGlyph() } }
-        )
+        // Deliberately NOT the shared ScreenHeader: its eyebrow/title/subtitle
+        // triple is navigation chrome ("SETTINGS / Preferences / Display · app ·
+        // account"), which on a page you just tapped into only restates itself
+        // and reads as clutter. Instead: one large-title line with the close
+        // button sitting where the gear you tapped was, and the sections below
+        // label themselves.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Settings",
+                color = TrackerColors.TextPrimary,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = FontFamily.SansSerif,
+                letterSpacing = (-0.6).sp,
+                modifier = Modifier.weight(1f)
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            HeaderIconButton(
+                onClick = onBack,
+                contentDescription = "Close settings"
+            ) { CloseGlyph() }
+        }
+
+        Spacer(modifier = Modifier.height(22.dp))
 
         // ---------------------------------------------------------- display
         SettingsSection(title = "DISPLAY") {
