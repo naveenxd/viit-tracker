@@ -7,12 +7,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,9 +26,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -262,18 +271,23 @@ fun TimetableScreen(
             title = branchLabel ?: "Weekly schedule",
             subtitle = if (semesterLabel != null) "VIGNAN'S IIT  ·  ${semesterLabel.uppercase()}" else "VIGNAN'S IIT",
             onSettingsClick = onOpenSettings,
-            trailing = if (facultyList.isNotEmpty()) {
-                { FacultyChip(count = facultyList.size) { showFacultyDialog = true } }
-            } else null,
-            // The parent list item is not spaced internally, so the header keeps
-            // its own gap before the NOW card.
+            // The faculty trigger lives on the NOW card rather than here: as a
+            // header chip it fought the title for width (which then ellipsised
+            // names like "Computer Science and Engineering") and had to be
+            // 44dp tall next to a 34dp gear. The header is title + gear only.
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
         if (weekly.isEmpty()) {
             TimetableUnavailableCard()
         } else {
-            RealTimeNowCard(timeInfo = timeInfo, weekly = weekly, use24Hour = use24Hour)
+            RealTimeNowCard(
+                timeInfo = timeInfo,
+                weekly = weekly,
+                use24Hour = use24Hour,
+                facultyCount = facultyList.size,
+                onFacultyClick = { showFacultyDialog = true }
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -567,7 +581,9 @@ private fun TagChip(text: String, color: Color) {
 private fun RealTimeNowCard(
     timeInfo: TimeInfo,
     weekly: Map<Int, List<TTItem>>,
-    use24Hour: Boolean
+    use24Hour: Boolean,
+    facultyCount: Int = 0,
+    onFacultyClick: () -> Unit = {}
 ) {
     val nowMin = timeInfo.minutesOfDay
     val items = weekly[timeInfo.dayOfWeekIdx].orEmpty()
@@ -633,7 +649,7 @@ private fun RealTimeNowCard(
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
-        Row {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .width(4.dp)
@@ -688,6 +704,11 @@ private fun RealTimeNowCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            if (facultyCount > 0) {
+                Spacer(modifier = Modifier.width(12.dp))
+                FacultyTrigger(count = facultyCount, onClick = onFacultyClick)
             }
         }
     }
@@ -776,45 +797,68 @@ private fun DaySelectorTabs(
 
 // ===================== Faculty dialog =====================
 
-/** Compact faculty trigger that sits beside the day selector, away from the nav bar. */
+/**
+ * Faculty entry point, carried on the NOW card rather than in the page header.
+ *
+ * In the header it competed with the title for width (long branch names
+ * ellipsised earlier) and had to be 44dp tall next to a 34dp gear, so the two
+ * never lined up. Here it is contextual — "who teaches today" — and costs no
+ * extra vertical space, because the NOW card is already ~84dp tall.
+ */
 @Composable
-private fun FacultyChip(count: Int, onClick: () -> Unit) {
-    Box(
+private fun FacultyTrigger(count: Int, onClick: () -> Unit) {
+    Column(
         modifier = Modifier
-            .heightIn(min = 44.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(TrackerColors.SurfaceElevated)
+            .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center
+            .semantics { contentDescription = "Faculty and courses, $count allocations" }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "FACULTY",
-                color = TrackerColors.TextSecondary,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(TrackerColors.SurfaceElevated)
-                    .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
-                    .padding(horizontal = 6.dp, vertical = 1.dp)
-            ) {
-                Text(
-                    text = "$count",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-        }
+        PersonGlyph(color = TrackerColors.TextSecondary)
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "$count",
+            color = TrackerColors.TextSecondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+/** Head + shoulders, same hairline weight as the nav bar's canvas glyphs. */
+@Composable
+private fun PersonGlyph(
+    modifier: Modifier = Modifier,
+    color: Color = TrackerColors.TextSecondary
+) {
+    Canvas(modifier = modifier.size(15.dp)) {
+        val w = size.width
+        val h = size.height
+        val sw = 1.5.dp.toPx()
+        val stroke = Stroke(width = sw, cap = StrokeCap.Round)
+
+        drawCircle(
+            color = color,
+            radius = w * 0.20f,
+            center = Offset(w * 0.5f, h * 0.29f),
+            style = stroke
+        )
+
+        drawArc(
+            color = color,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(w * 0.17f, h * 0.54f),
+            size = Size(w * 0.66f, h * 0.72f),
+            style = stroke
+        )
     }
 }
 
@@ -824,65 +868,105 @@ private fun FacultyDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = TrackerColors.SurfaceDark,
-            border = BorderStroke(1.dp, TrackerColors.HairlineBorder),
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(TrackerColors.SurfaceDark)
+                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(20.dp))
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "FACULTY & COURSES",
-                            color = TrackerColors.TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.2.sp
-                        )
-                        Text(
-                            text = "${facultyList.size} allocations for your section",
-                            color = TrackerColors.TextSubtle,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.SansSerif
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(TrackerColors.SurfaceElevated)
-                            .border(1.dp, TrackerColors.HairlineBorder, CircleShape)
-                            .clickable(onClick = onDismiss),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "✕",
-                            color = TrackerColors.TextMuted,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+            // Header reuses the page header's rhythm (mono eyebrow → sans title),
+            // with the standard close button so it matches the settings page.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 18.dp, end = 14.dp, top = 16.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "FACULTY",
+                        color = TrackerColors.TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 2.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "${facultyList.size} allocations",
+                        color = TrackerColors.TextPrimary,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    Text(
+                        text = "Who teaches what, for your section",
+                        color = TrackerColors.TextSubtle,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                HeaderIconButton(
+                    onClick = onDismiss,
+                    contentDescription = "Close faculty list"
+                ) { CloseGlyph() }
+            }
 
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(TrackerColors.HairlineBorder)
+            )
+
+            // One grouped list with hairline rules — previously every row was its
+            // own bordered card, which at 17 rows read as a wall of boxes.
+            Box(modifier = Modifier.fillMaxWidth()) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    items(facultyList) { fac ->
+                    itemsIndexed(facultyList) { index, fac ->
                         FacultyDialogRow(faculty = fac)
+
+                        if (index != facultyList.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 18.dp)
+                                    .height(1.dp)
+                                    .background(TrackerColors.HairlineBorder)
+                            )
+                        }
                     }
                 }
+
+                // 17 rows never fit, so the list always ends mid-row. Fade the cut
+                // instead of letting it collide with the dialog's rounded corner.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(26.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, TrackerColors.SurfaceDark)
+                            )
+                        )
+                )
             }
         }
     }
@@ -893,52 +977,58 @@ private fun FacultyDialogRow(faculty: FacultyAllocation) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(TrackerColors.SurfaceElevated)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 18.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(7.dp)
                 .clip(CircleShape)
                 .background(resolveColor(faculty.subject))
         )
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = faculty.code.ifBlank { faculty.subject },
-                color = TrackerColors.TextMuted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
-            Text(
                 text = faculty.subject,
                 color = TrackerColors.TextPrimary,
-                fontSize = 12.5.sp,
+                fontSize = 13.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = FontFamily.SansSerif,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            if (faculty.code.isNotBlank()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = faculty.code,
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.6.sp,
+                    maxLines = 1
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        if (faculty.faculty.isNotBlank()) {
+            Spacer(modifier = Modifier.width(12.dp))
 
-        Text(
-            text = faculty.faculty,
-            color = TrackerColors.TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 120.dp)
-        )
+            Text(
+                text = faculty.faculty,
+                color = TrackerColors.TextSecondary,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 128.dp)
+            )
+        }
     }
 }
 
