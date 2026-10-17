@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -881,86 +882,150 @@ private fun FeesAndConductSection(
 // SIGN OUT CONFIRMATION
 // ============================================================================
 
+/**
+ * Sign-out confirmation, built like an iOS alert: lifted card, a glyph badge,
+ * a centred title + message, then a horizontal button row split by hairlines —
+ * the destructive action in red, cancel in the accent colour. No filled pills.
+ */
 @Composable
 internal fun SignOutConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = TrackerColors.SurfaceDark,
-        titleContentColor = TrackerColors.TextPrimary,
-        textContentColor = TrackerColors.TextSecondary,
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(14.dp)),
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.86f)
+                .clip(RoundedCornerShape(22.dp))
+                .background(TrackerColors.SurfaceElevated)
+                .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(22.dp))
+        ) {
+            Column(
+                modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(TrackerColors.DangerRose)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                        .background(TrackerColors.DangerRoseSubtle)
+                        .border(1.dp, TrackerColors.DangerRose.copy(alpha = 0.35f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SignOutGlyph(color = TrackerColors.DangerRose)
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 Text(
-                    text = "SIGN OUT",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp
+                    text = "Sign out?",
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.SansSerif
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "You'll need your registration number and password to sign back in.",
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 19.sp
                 )
             }
-        },
-        text = {
-            Text(
-                text = "You'll need your registration number and password to sign back in. Sign out of this account?",
-                fontSize = 12.sp,
-                color = TrackerColors.TextSecondary,
-                fontFamily = FontFamily.SansSerif,
-                lineHeight = 18.sp
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(TrackerColors.HairlineBorderLight)
             )
-        },
-        confirmButton = {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(TrackerColors.DangerRoseSubtle)
-                    .border(
-                        1.dp,
-                        TrackerColors.DangerRose.copy(alpha = 0.5f),
-                        RoundedCornerShape(8.dp)
-                    )
-                    .clickable { onConfirm() }
-                    .padding(horizontal = 16.dp, vertical = 9.dp)
-            ) {
-                Text(
-                    text = "SIGN OUT",
-                    color = TrackerColors.DangerRose,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.6.sp
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                AlertAction(
+                    label = "Cancel",
+                    color = TrackerColors.TextPrimary,
+                    weight = FontWeight.Medium,
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
                 )
-            }
-        },
-        dismissButton = {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onDismiss() }
-                    .padding(horizontal = 14.dp, vertical = 9.dp)
-            ) {
-                Text(
-                    text = "CANCEL",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.6.sp
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(50.dp)
+                        .background(TrackerColors.HairlineBorderLight)
+                )
+
+                AlertAction(
+                    label = "Sign out",
+                    color = TrackerColors.DangerRose,
+                    weight = FontWeight.SemiBold,
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
-    )
+    }
+}
+
+/** One full-bleed button of the alert's action row. */
+@Composable
+private fun AlertAction(
+    label: String,
+    color: Color,
+    weight: FontWeight,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(50.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = color,
+            fontSize = 16.sp,
+            fontWeight = weight,
+            fontFamily = FontFamily.SansSerif
+        )
+    }
+}
+
+/** Door + outgoing arrow, in the same canvas hairline style as the other glyphs. */
+@Composable
+private fun SignOutGlyph(
+    modifier: Modifier = Modifier,
+    color: Color = TrackerColors.DangerRose
+) {
+    Canvas(modifier = modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val sw = 1.6.dp.toPx()
+        val stroke = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+        // Door: three sides of a rounded box, open on the right.
+        val door = Path().apply {
+            moveTo(w * 0.60f, h * 0.13f)
+            lineTo(w * 0.20f, h * 0.13f)
+            lineTo(w * 0.20f, h * 0.87f)
+            lineTo(w * 0.60f, h * 0.87f)
+        }
+        drawPath(door, color, style = stroke)
+
+        // Arrow leaving the door.
+        drawLine(color, Offset(w * 0.46f, h * 0.5f), Offset(w * 0.86f, h * 0.5f), sw, StrokeCap.Round)
+        drawLine(color, Offset(w * 0.70f, h * 0.34f), Offset(w * 0.86f, h * 0.5f), sw, StrokeCap.Round)
+        drawLine(color, Offset(w * 0.70f, h * 0.66f), Offset(w * 0.86f, h * 0.5f), sw, StrokeCap.Round)
+    }
 }
 
 // ============================================================================
