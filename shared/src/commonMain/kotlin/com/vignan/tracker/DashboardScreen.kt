@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -91,6 +90,9 @@ fun DashboardScreen(
     onLogout: () -> Unit = {}
 ) {
     var selectedNavTab by remember { mutableStateOf(MainNavTab.HOME) }
+    // Settings is an in-place full-screen surface, not a nav destination: the
+    // app has no navigation stack, and every tab's header gear just flips this.
+    var showSettings by remember { mutableStateOf(false) }
 
     // The real UI is always composed; data fills in when the response arrives.
     val subjects = data?.subjects ?: emptyList()
@@ -102,12 +104,27 @@ fun DashboardScreen(
     val hasData = data != null
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (showSettings) {
+            // System back returns to the tab the gear was tapped from.
+            AppBackHandler { showSettings = false }
+            SettingsScreen(
+                onBack = { showSettings = false },
+                onLogout = {
+                    showSettings = false
+                    onLogout()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
         if (selectedNavTab == MainNavTab.REGISTER) {
             // REGISTER owns its own lazy scroll: it fills the screen and would
             // otherwise be nested in this LazyColumn under an unbounded height.
             // It reserves its own bottom inset for the nav bar, so it takes the
             // full height here like every other tab.
-            RegisterScreen(modifier = Modifier.fillMaxSize())
+            RegisterScreen(
+                onOpenSettings = { showSettings = true },
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -116,12 +133,35 @@ fun DashboardScreen(
         ) {
             when (selectedNavTab) {
                 MainNavTab.HOME -> {
+                    val statusColor = attendanceStatusColor(hasData, overallPercentage)
+
                     item {
-                        HeroTerminalCard(
-                            studentName = data?.studentName.orEmpty(),
-                            rollNumber = data?.rollNumber.orEmpty(),
-                            branch = liveResponse?.profile?.branch.orEmpty(),
-                            semester = liveResponse?.profile?.semester ?: "",
+                        // Home's header keeps its identity content (greeting, name,
+                        // roll, branch/semester) but now shares the exact header
+                        // rhythm every other tab uses — plus the settings gear.
+                        ScreenHeader(
+                            eyebrow = timeGreeting(),
+                            title = displayName(data?.studentName.orEmpty()),
+                            titleSuffix = data?.rollNumber
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { "($it)" },
+                            subtitle = listOfNotNull(
+                                liveResponse?.profile?.branch?.takeIf { it.isNotBlank() },
+                                liveResponse?.profile?.semester?.takeIf { it.isNotBlank() }
+                            ).joinToString("  ·  ").ifBlank { "Attendance overview" },
+                            onSettingsClick = { showSettings = true },
+                            trailing = {
+                                StatusPill(
+                                    hasData = hasData,
+                                    overallPercentage = overallPercentage,
+                                    statusColor = statusColor
+                                )
+                            }
+                        )
+                    }
+
+                    item {
+                        HeroAttendanceCard(
                             overallPercentage = overallPercentage,
                             totalAttended = totalAttended,
                             totalConducted = totalConducted,
@@ -171,7 +211,7 @@ fun DashboardScreen(
 
                 MainNavTab.ATTENDANCE -> {
                     item {
-                        ReportScreen()
+                        ReportScreen(onOpenSettings = { showSettings = true })
                     }
                 }
 
@@ -181,7 +221,10 @@ fun DashboardScreen(
 
                 MainNavTab.TIMETABLE -> {
                     item {
-                        TimetableScreen(liveResponse = liveResponse)
+                        TimetableScreen(
+                            liveResponse = liveResponse,
+                            onOpenSettings = { showSettings = true }
+                        )
                     }
                 }
 
@@ -191,7 +234,8 @@ fun DashboardScreen(
                             liveResponse = liveResponse,
                             isRefreshing = isRefreshing,
                             onRefresh = onFetchClick,
-                            onLogout = onLogout
+                            onLogout = onLogout,
+                            onOpenSettings = { showSettings = true }
                         )
                     }
                 }
@@ -205,97 +249,45 @@ fun DashboardScreen(
             onTabSelected = { selectedNavTab = it },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+        }
     }
 }
 
 // ---------------------------------------------------------------- hero
 
+/**
+ * Attendance verdict colour shared by the header's status pill and the hero
+ * percentage block, so one value can never drift from the other.
+ */
+private fun attendanceStatusColor(hasData: Boolean, overallPercentage: Double): Color = when {
+    !hasData -> TrackerColors.TextMuted
+    overallPercentage >= 80.0 -> TrackerColors.SafeEmerald
+    overallPercentage >= 75.0 -> TrackerColors.WarningAmber
+    else -> TrackerColors.DangerRose
+}
+
+/**
+ * The home tab's hero: the big percentage + progress bar.
+ *
+ * Identity (greeting, name, roll, branch/semester, status pill) moved up into
+ * the shared [ScreenHeader]; this card now only carries the number, exactly the
+ * way every other tab starts with a single focused block under its header.
+ */
 @Composable
-private fun HeroTerminalCard(
-    studentName: String,
-    rollNumber: String,
-    branch: String,
-    semester: String,
+private fun HeroAttendanceCard(
     overallPercentage: Double,
     totalAttended: Int,
     totalConducted: Int,
     hasData: Boolean,
     dataVersion: Int = 0
 ) {
-    val statusColor = when {
-        !hasData -> TrackerColors.TextMuted
-        overallPercentage >= 80.0 -> TrackerColors.SafeEmerald
-        overallPercentage >= 75.0 -> TrackerColors.WarningAmber
-        else -> TrackerColors.DangerRose
-    }
+    val statusColor = attendanceStatusColor(hasData, overallPercentage)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp)
+            .padding(top = 4.dp, bottom = 4.dp)
     ) {
-        // Greeting + live status pill
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = timeGreeting(),
-                color = TrackerColors.TextMuted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp
-            )
-            StatusPill(
-                hasData = hasData,
-                overallPercentage = overallPercentage,
-                statusColor = statusColor
-            )
-        }
-
-        // Greeting: name (roll no)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = displayName(studentName),
-                color = TrackerColors.TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.SansSerif,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            if (rollNumber.isNotBlank()) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "($rollNumber)",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1
-                )
-            }
-        }
-
-        // Meta: Branch • Semester
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = listOfNotNull(
-                branch.takeIf { it.isNotBlank() },
-                semester.takeIf { it.isNotBlank() }
-            ).joinToString("  ·  ").ifBlank { "—" },
-            color = TrackerColors.TextSubtle,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
         // Attendance block: renders the "-/-" placeholder first, then the real
         // numbers appear (fade + lift + scale) once the snapshot lands — the same
         // read as the home-screen widget's syncing → data transition. Every manual
@@ -824,11 +816,16 @@ private fun formatFetchedAt(scrapedAt: String?): String {
 
     val month = java.text.SimpleDateFormat("MMM", java.util.Locale.US)
         .format(cal.time).uppercase(java.util.Locale.US)
-    val hour12 = cal.get(java.util.Calendar.HOUR)
-    val hour = if (hour12 == 0) 12 else hour12
     val minute = cal.get(java.util.Calendar.MINUTE).toString().padStart(2, '0')
-    val amPm = if (cal.get(java.util.Calendar.AM_PM) == java.util.Calendar.AM) "am" else "pm"
-    return "${cal.get(java.util.Calendar.DAY_OF_MONTH)} $month, $hour:$minute $amPm"
+    return if (AppSettings.use24HourClock) {
+        val hour24 = cal.get(java.util.Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+        "${cal.get(java.util.Calendar.DAY_OF_MONTH)} $month, $hour24:$minute"
+    } else {
+        val hour12 = cal.get(java.util.Calendar.HOUR)
+        val hour = if (hour12 == 0) 12 else hour12
+        val amPm = if (cal.get(java.util.Calendar.AM_PM) == java.util.Calendar.AM) "am" else "pm"
+        "${cal.get(java.util.Calendar.DAY_OF_MONTH)} $month, $hour:$minute $amPm"
+    }
 }
 
 // ---------------------------------------------------------------- date helpers
@@ -1213,61 +1210,6 @@ private fun NavTabIcon(tab: MainNavTab, color: Color, scale: Float = 1f) {
                     quadraticTo(w * 0.83f, h * 0.60f, w * 0.84f, h * 0.88f)
                 }
                 drawPath(shoulders, color, style = stroke)
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- header
-
-@Composable
-fun HeaderBar(
-    isLoggedIn: Boolean,
-    onLogout: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(TrackerColors.PureBlack)
-            .statusBarsPadding()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Wordmark
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = "VIIT",
-                    color = TrackerColors.TextPrimary,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "tracker",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier.padding(bottom = 1.dp)
-                )
-            }
-
-            if (isLoggedIn) {
-                Text(
-                    text = "Sign out",
-                    color = TrackerColors.TextSubtle,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier
-                        .clickable { onLogout() }
-                        .padding(vertical = 4.dp, horizontal = 2.dp)
-                )
             }
         }
     }

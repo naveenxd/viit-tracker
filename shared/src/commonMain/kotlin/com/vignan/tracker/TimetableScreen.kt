@@ -151,18 +151,6 @@ private fun parseTimeRange(time: String?): Pair<Int, Int>? {
     return if (endMin > startMin) startMin to endMin else null
 }
 
-/** 12-hour clock without meridiem, matching the college's "12.30–1.30" convention. */
-private fun formatClock(min: Int): String {
-    val h24 = (min / 60) % 24
-    val m = min % 60
-    val h = when {
-        h24 == 0 -> 12
-        h24 > 12 -> h24 - 12
-        else -> h24
-    }
-    return "$h.${m.toString().padStart(2, '0')}"
-}
-
 /** Finds the faculty allocation for a subject: code containment first, then word overlap. */
 private fun resolveFaculty(subject: String, faculty: List<FacultyAllocation>): String? {
     if (faculty.isEmpty()) return null
@@ -183,7 +171,11 @@ private fun resolveFaculty(subject: String, faculty: List<FacultyAllocation>): S
     }?.faculty?.trim()?.ifBlank { null }
 }
 
-private fun buildItem(run: List<TimetablePeriod>, faculty: List<FacultyAllocation>): TTItem? {
+private fun buildItem(
+    run: List<TimetablePeriod>,
+    faculty: List<FacultyAllocation>,
+    use24Hour: Boolean
+): TTItem? {
     val first = run.first()
     val name = prettySubject(first.subject).ifBlank { "Class" }
     val slotStart = SLOTS.firstOrNull { it.n == first.slotNumber } ?: return null
@@ -201,7 +193,7 @@ private fun buildItem(run: List<TimetablePeriod>, faculty: List<FacultyAllocatio
         tag = detectTag(name),
         startMin = startMin,
         endMin = endMin,
-        timeLabel = "${formatClock(startMin)}–${formatClock(endMin)}",
+        timeLabel = "${formatClockTime(startMin, use24Hour)}–${formatClockTime(endMin, use24Hour)}",
         facultyName = resolveFaculty(first.subject, faculty)
     )
 }
@@ -209,7 +201,8 @@ private fun buildItem(run: List<TimetablePeriod>, faculty: List<FacultyAllocatio
 /** Maps the backend's weekly timetable into renderable rows keyed by weekday index (0=Sun..6=Sat). */
 fun buildWeeklyTimetable(
     timetable: List<TimetableDay>,
-    faculty: List<FacultyAllocation>
+    faculty: List<FacultyAllocation>,
+    use24Hour: Boolean = AppSettings.use24HourClock
 ): Map<Int, List<TTItem>> {
     if (timetable.isEmpty()) return emptyMap()
     val built = mutableMapOf<Int, List<TTItem>>()
@@ -226,7 +219,7 @@ fun buildWeeklyTimetable(
                 periods[j + 1].slotNumber == periods[j].slotNumber + 1 &&
                 periods[j + 1].subject.trim().equals(periods[j].subject.trim(), ignoreCase = true)
             ) j++
-            buildItem(periods.subList(i, j + 1), faculty)?.let { items += it }
+            buildItem(periods.subList(i, j + 1), faculty, use24Hour)?.let { items += it }
             i = j + 1
         }
         built[dayIdx] = items
@@ -238,12 +231,14 @@ fun buildWeeklyTimetable(
 
 @Composable
 fun TimetableScreen(
-    liveResponse: LiveAttendanceResponse? = null
+    liveResponse: LiveAttendanceResponse? = null,
+    onOpenSettings: () -> Unit = {}
 ) {
     val attendance = liveResponse?.attendance
     val facultyList = remember(attendance) { attendance?.faculty.orEmpty() }
-    val weekly = remember(attendance?.timetable, facultyList) {
-        buildWeeklyTimetable(attendance?.timetable.orEmpty(), facultyList)
+    val use24Hour = AppSettings.use24HourClock
+    val weekly = remember(attendance?.timetable, facultyList, use24Hour) {
+        buildWeeklyTimetable(attendance?.timetable.orEmpty(), facultyList, use24Hour)
     }
 
     // Live clock — keeps the NOW card and the current-period highlight fresh.
@@ -262,45 +257,23 @@ fun TimetableScreen(
     val branchLabel = profile?.branch?.trim()?.takeIf { it.isNotEmpty() }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Section header — straight from the student's profile
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (semesterLabel != null) "VIGNAN'S IIT  •  ${semesterLabel.uppercase()}" else "VIGNAN'S IIT",
-                    color = TrackerColors.TextMuted,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.2.sp
-                )
-                Text(
-                    text = branchLabel ?: "TIMETABLE",
-                    color = TrackerColors.TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.SansSerif,
-                    letterSpacing = (-0.5).sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (facultyList.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(10.dp))
-                FacultyChip(count = facultyList.size) { showFacultyDialog = true }
-            }
-        }
+        ScreenHeader(
+            eyebrow = "TIMETABLE",
+            title = branchLabel ?: "Weekly schedule",
+            subtitle = if (semesterLabel != null) "VIGNAN'S IIT  ·  ${semesterLabel.uppercase()}" else "VIGNAN'S IIT",
+            onSettingsClick = onOpenSettings,
+            trailing = if (facultyList.isNotEmpty()) {
+                { FacultyChip(count = facultyList.size) { showFacultyDialog = true } }
+            } else null,
+            // The parent list item is not spaced internally, so the header keeps
+            // its own gap before the NOW card.
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
 
         if (weekly.isEmpty()) {
             TimetableUnavailableCard()
         } else {
-            RealTimeNowCard(timeInfo = timeInfo, weekly = weekly)
+            RealTimeNowCard(timeInfo = timeInfo, weekly = weekly, use24Hour = use24Hour)
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -319,7 +292,8 @@ fun TimetableScreen(
                 SlotGrid(
                     dayItems = dayItems,
                     isToday = selectedDay == todayIdx,
-                    nowMin = timeInfo.minutesOfDay
+                    nowMin = timeInfo.minutesOfDay,
+                    use24Hour = use24Hour
                 )
             }
         }
@@ -342,7 +316,8 @@ fun TimetableScreen(
 private fun SlotGrid(
     dayItems: List<TTItem>,
     isToday: Boolean,
-    nowMin: Int
+    nowMin: Int,
+    use24Hour: Boolean
 ) {
     val processed = mutableSetOf<Int>()
 
@@ -368,15 +343,16 @@ private fun SlotGrid(
                 )
             } else {
                 processed += slot.n
+                val slotLabel = "${formatClockTime(slot.startMin, use24Hour)}–${formatClockTime(slot.endMin, use24Hour)}"
                 if (slot.n == 5) {
                     GhostRowCard(
-                        timeLabel = slot.label,
+                        timeLabel = slotLabel,
                         title = "Lunch Break",
                         tag = "BREAK",
                         tagColor = BreakColor
                     )
                 } else {
-                    GhostRowCard(timeLabel = slot.label, title = "Free")
+                    GhostRowCard(timeLabel = slotLabel, title = "Free")
                 }
             }
         }
@@ -590,7 +566,8 @@ private fun TagChip(text: String, color: Color) {
 @Composable
 private fun RealTimeNowCard(
     timeInfo: TimeInfo,
-    weekly: Map<Int, List<TTItem>>
+    weekly: Map<Int, List<TTItem>>,
+    use24Hour: Boolean
 ) {
     val nowMin = timeInfo.minutesOfDay
     val items = weekly[timeInfo.dayOfWeekIdx].orEmpty()
@@ -609,13 +586,13 @@ private fun RealTimeNowCard(
             nowMin in breakTime -> {
                 statusLabel = "BREAK"
                 statusTitle = "Short break"
-                statusTime = "10.25–10.50"
+                statusTime = "${formatClockTime(breakTime.first, use24Hour)}–${formatClockTime(breakTime.last + 1, use24Hour)}"
                 statusColor = BreakColor
             }
             nowMin in lunchTime -> {
                 statusLabel = "LUNCH"
                 statusTitle = "Lunch break"
-                statusTime = "12.30–2.20"
+                statusTime = "${formatClockTime(lunchTime.first, use24Hour)}–${formatClockTime(lunchTime.last + 1, use24Hour)}"
                 statusColor = BreakColor
             }
             else -> {
@@ -626,14 +603,14 @@ private fun RealTimeNowCard(
                     current != null -> {
                         statusLabel = "IN PROGRESS"
                         statusTitle = current.name
-                        statusTime = "${formatClock(current.startMin)}–${formatClock(current.endMin)}"
+                        statusTime = "${formatClockTime(current.startMin, use24Hour)}–${formatClockTime(current.endMin, use24Hour)}"
                         statusColor = current.color
                         facultyInfo = current.facultyName
                     }
                     next != null -> {
                         statusLabel = "UP NEXT"
                         statusTitle = next.name
-                        statusTime = "Starts ${formatClock(next.startMin)}"
+                        statusTime = "Starts ${formatClockTime(next.startMin, use24Hour)}"
                         statusColor = next.color
                         facultyInfo = next.facultyName
                     }
