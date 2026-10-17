@@ -124,167 +124,172 @@ fun ProfileScreen(
         ScreenHeader(
             eyebrow = "PROFILE",
             title = "Student account",
-            subtitle = listOfNotNull(
-                branch.takeIf { it.isNotBlank() && it != "—" },
-                semester.takeIf { it.isNotBlank() && it != "—" }
-            ).joinToString("  ·  ").ifBlank { rollNo },
+            // The card below owns the identity (name, roll, branch); the header
+            // carries the one thing it can't — how fresh this snapshot is.
+            subtitle = liveResponse?.scrapedAt
+                ?.takeIf { it.isNotBlank() }
+                ?.let { "Last sync  ${formatFetchedAt(it)}" }
+                ?: "Awaiting first sync",
             onSettingsClick = onOpenSettings
         )
 
         // ================= HERO: Sleek Student Identity Card =================
-        Box(
+        // Lifted one step off the page surface (SurfaceCard + lighter hairline)
+        // with the key metrics set into their own inset strip, so the card reads
+        // as the page's anchor instead of another flat panel.
+        val attendanceAccent = attendanceStatusColor(hasData = held > 0, overallPercentage = pct)
+
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(12.dp))
-                .padding(18.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(TrackerColors.SurfaceCard)
+                .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(16.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // Top Identity Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+            // Top Identity Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Monogram, ringed in the attendance verdict colour
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(TrackerColors.SurfaceElevated)
+                        .border(1.5.dp, attendanceAccent, CircleShape),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Modern Avatar Monogram with status ring
-                    Box(
-                        modifier = Modifier
-                            .size(54.dp)
-                            .clip(CircleShape)
-                            .background(TrackerColors.SurfaceElevated)
-                            .border(1.5.dp, TrackerColors.HairlineBorderLight, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Text(
+                        text = initials,
+                        color = TrackerColors.PrimaryWhite,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = name,
+                        color = TrackerColors.TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = (-0.2).sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = initials,
-                            color = TrackerColors.PrimaryWhite,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.SansSerif
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = name,
-                            color = TrackerColors.TextPrimary,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.SansSerif,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = rollNo,
+                            color = TrackerColors.TextSecondary,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold
                         )
 
-                        Spacer(modifier = Modifier.height(3.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = rollNo,
-                                color = TrackerColors.TextSecondary,
-                                fontSize = 13.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold
+                        // Copy roll no — icon-only button
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    if (rollNo.isNotBlank() && rollNo != "—") {
+                                        clipboardManager.setText(AnnotatedString(rollNo))
+                                        isCopied = true
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CopyIcon(
+                                copied = isCopied,
+                                tint = if (isCopied) TrackerColors.SafeEmerald else TrackerColors.TextMuted
                             )
+                        }
 
+                        if (!admissionNo.isNullOrBlank()) {
                             Spacer(modifier = Modifier.width(8.dp))
-
-                            // Copy roll no — icon-only button
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        if (rollNo.isNotBlank() && rollNo != "—") {
-                                            clipboardManager.setText(AnnotatedString(rollNo))
-                                            isCopied = true
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CopyIcon(
-                                    copied = isCopied,
-                                    tint = if (isCopied) TrackerColors.SafeEmerald else TrackerColors.TextMuted
-                                )
-                            }
-
-                            if (!admissionNo.isNullOrBlank()) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "ADM: $admissionNo",
-                                    color = TrackerColors.TextSubtle,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
+                            Text(
+                                text = "ADM $admissionNo",
+                                color = TrackerColors.TextSubtle,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
                     }
                 }
+            }
 
-                // Course & Branch Tagline
-                Text(
-                    text = "$course  •  $branch",
-                    color = TrackerColors.TextSecondary,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.SansSerif,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // Course & Branch Tagline
+            Text(
+                text = "$course  •  $branch",
+                color = TrackerColors.TextSecondary,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
 
-                // Badges Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (semester.isNotBlank() && semester != "—") {
-                        StatusTag(text = semester, color = TrackerColors.PrimaryAccent)
-                    }
-
-                    val rank = personal?.rank?.takeIf { it.isNotBlank() }
-                    val entrance = personal?.entranceType?.takeIf { it.isNotBlank() } ?: "ENTRANCE"
-                    if (rank != null) {
-                        StatusTag(text = "$entrance #$rank", color = TrackerColors.SafeEmerald)
-                    }
-
-                    val seatType = personal?.seatType?.takeIf { it.isNotBlank() }
-                    if (seatType != null) {
-                        StatusTag(text = seatType, color = TrackerColors.TextMuted)
-                    }
+            // Badges Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (semester.isNotBlank() && semester != "—") {
+                    StatusTag(text = semester, color = TrackerColors.PrimaryAccent)
                 }
 
-                // Divider
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(TrackerColors.HairlineBorder)
-                )
+                val rank = personal?.rank?.takeIf { it.isNotBlank() }
+                val entrance = personal?.entranceType?.takeIf { it.isNotBlank() } ?: "ENTRANCE"
+                if (rank != null) {
+                    StatusTag(text = "$entrance #$rank", color = TrackerColors.SafeEmerald)
+                }
 
-                // Quick Metric Bar (4 Key Stats)
+                val seatType = personal?.seatType?.takeIf { it.isNotBlank() }
+                if (seatType != null) {
+                    StatusTag(text = seatType, color = TrackerColors.TextMuted)
+                }
+            }
+
+            // Quick Metric Strip — inset panel, so the three stats read as a
+            // single grouped block instead of three loose columns.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(TrackerColors.SurfaceElevated)
+                    .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(12.dp))
+                    .padding(vertical = 13.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     HeroMetricTile(
                         label = "ATTENDANCE",
                         value = if (held > 0) "${formatPercentage(pct)}" else "—",
-                        subtext = if (held > 0) "$attended/$held Classes" else "Register Active",
-                        accentColor = if (pct >= 75.0) TrackerColors.SafeEmerald else TrackerColors.DangerRose,
+                        subtext = if (held > 0) "$attended/$held classes" else "Register active",
+                        accentColor = attendanceAccent,
                         modifier = Modifier.weight(1f)
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(34.dp)
-                            .background(TrackerColors.HairlineBorder)
-                    )
+                    MetricDivider()
 
                     val backlogCount = status?.backlogs?.let {
                         if (it.contains("no backlogs", ignoreCase = true)) "0" else it
@@ -293,17 +298,12 @@ fun ProfileScreen(
                     HeroMetricTile(
                         label = "BACKLOGS",
                         value = backlogCount,
-                        subtext = "Clear Record",
+                        subtext = if (backlogCount == "0") "Clear record" else "Pending",
                         accentColor = if (backlogCount == "0") TrackerColors.SafeEmerald else TrackerColors.DangerRose,
                         modifier = Modifier.weight(1f)
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(34.dp)
-                            .background(TrackerColors.HairlineBorder)
-                    )
+                    MetricDivider()
 
                     val dueText = fees?.totalDue?.takeIf { it.isNotBlank() } ?: "00.00"
                     val isDue = dueText != "00.00" && dueText != "0.00" && dueText != "0"
@@ -1168,20 +1168,22 @@ private fun HeroMetricTile(
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.SansSerif,
-            letterSpacing = 0.5.sp
+            letterSpacing = 0.8.sp,
+            maxLines = 1
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(5.dp))
 
         Text(
             text = value,
             color = accentColor,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.SansSerif
+            fontFamily = FontFamily.SansSerif,
+            maxLines = 1
         )
 
-        Spacer(modifier = Modifier.height(1.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         Text(
             text = subtext,
@@ -1192,6 +1194,17 @@ private fun HeroMetricTile(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+/** Hairline rule between the hero card's inset metrics. */
+@Composable
+private fun MetricDivider() {
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(38.dp)
+            .background(TrackerColors.HairlineBorderLight)
+    )
 }
 
 /** Minimal copy glyph (two offset rounded sheets); swaps to a check while copied. */
