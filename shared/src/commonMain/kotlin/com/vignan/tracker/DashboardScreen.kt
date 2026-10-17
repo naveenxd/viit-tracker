@@ -259,7 +259,7 @@ fun DashboardScreen(
  * Attendance verdict colour shared by the header's status pill and the hero
  * percentage block, so one value can never drift from the other.
  */
-private fun attendanceStatusColor(hasData: Boolean, overallPercentage: Double): Color = when {
+internal fun attendanceStatusColor(hasData: Boolean, overallPercentage: Double): Color = when {
     !hasData -> TrackerColors.TextMuted
     overallPercentage >= 80.0 -> TrackerColors.SafeEmerald
     overallPercentage >= 75.0 -> TrackerColors.WarningAmber
@@ -800,7 +800,7 @@ private fun displayName(raw: String): String =
  * ISO scrapedAt → local, compact, human ("21 Sep, 10:12 pm"). Epoch-0 dates
  * (1970) from upstream clock glitches render as "—" instead of lying.
  */
-private fun formatFetchedAt(scrapedAt: String?): String {
+internal fun formatFetchedAt(scrapedAt: String?): String {
     if (scrapedAt.isNullOrBlank()) return "—"
     val parsed = runCatching {
         val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
