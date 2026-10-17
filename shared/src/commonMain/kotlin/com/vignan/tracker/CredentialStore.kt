@@ -17,6 +17,10 @@ interface CredentialStore {
     /** Resolved worker base URL, persisted to skip the KV lookup on cold starts. */
     suspend fun getApiBaseUrl(): String?
     suspend fun saveApiBaseUrl(url: String)
+
+    /** Display preference: 24-hour vs the college's 12-hour clock. Null when never chosen. */
+    suspend fun getUse24HourClock(): Boolean?
+    suspend fun saveUse24HourClock(enabled: Boolean)
 }
 
 expect fun getCredentialStore(): CredentialStore

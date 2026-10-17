@@ -65,6 +65,11 @@ fun AttendanceScreen() {
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Display preferences (24-hour clock) are independent of the session, so
+    // they load up front — the login screen doesn't need them, but the first
+    // dashboard frame must already be formatted correctly.
+    LaunchedEffect(Unit) { AppSettings.load() }
+
     // Instant launch: Load stored session & cache immediately without showing login screen
     LaunchedEffect(Unit) {
         val stored = repository.getStoredCredentials()

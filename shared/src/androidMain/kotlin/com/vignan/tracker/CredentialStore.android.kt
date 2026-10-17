@@ -83,6 +83,16 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         val prefs = getPrefs() ?: return
         prefs.edit().putString("api_base_url", url).apply()
     }
+
+    override suspend fun getUse24HourClock(): Boolean? {
+        val prefs = getPrefs() ?: return null
+        return if (prefs.contains("use_24h_clock")) prefs.getBoolean("use_24h_clock", false) else null
+    }
+
+    override suspend fun saveUse24HourClock(enabled: Boolean) {
+        val prefs = getPrefs() ?: return
+        prefs.edit().putBoolean("use_24h_clock", enabled).apply()
+    }
 }
 
 private val androidStore = AndroidCredentialStore { AppContextProvider.context }
