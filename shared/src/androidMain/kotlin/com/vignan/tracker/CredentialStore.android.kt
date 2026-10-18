@@ -120,6 +120,28 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
             ?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
             ?.getString("theme_mode", null)
 
+    override suspend fun getAmoledDark(): Boolean? {
+        // Mirror-authoritative, for the same reason as [getThemeMode].
+        peekAmoledDark()?.let { return it }
+        val prefs = getPrefs() ?: return null
+        return if (prefs.contains("amoled_dark")) prefs.getBoolean("amoled_dark", false) else null
+    }
+
+    override suspend fun saveAmoledDark(enabled: Boolean) {
+        contextProvider()?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?.edit()?.putBoolean("amoled_dark", enabled)?.apply()
+
+        val prefs = getPrefs() ?: return
+        prefs.edit().putBoolean("amoled_dark", enabled).apply()
+    }
+
+    override fun peekAmoledDark(): Boolean? {
+        val prefs = contextProvider()
+            ?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?: return null
+        return if (prefs.contains("amoled_dark")) prefs.getBoolean("amoled_dark", false) else null
+    }
+
     private companion object {
         /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
         const val UI_PREFS = "viit_ui_prefs"

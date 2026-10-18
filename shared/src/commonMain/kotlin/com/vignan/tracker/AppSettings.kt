@@ -17,9 +17,30 @@ object AppSettings {
     var use24HourClock by mutableStateOf(false)
         private set
 
-    /** Which look is in force. Defaults to [ThemeMode.SYSTEM]. */
+    /** Which of the three looks is selected. Defaults to [ThemeMode.SYSTEM]. */
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
         private set
+
+    /**
+     * The true-black variant, layered on whichever dark appearance is in force
+     * (explicit Dark, or System while the device is dark). Kept separate from
+     * [themeMode] so it survives a detour through the light look.
+     */
+    var amoledDark by mutableStateOf(false)
+        private set
+
+    /**
+     * The dark/light appearance actually showing, once [ThemeMode.SYSTEM] has
+     * resolved against [systemDark]. The picker shows the Amoled switch only
+     * while this is true — there is nothing to make black otherwise.
+     */
+    val isDarkNow: Boolean
+        get() = when (themeMode) {
+            ThemeMode.SYSTEM -> systemDark
+            ThemeMode.LIGHT -> false
+            // Dark, and any stale id that resolved to a dark look.
+            else -> true
+        }
 
     /**
      * The device's own dark-mode flag — the input [ThemeMode.SYSTEM] resolves
@@ -32,10 +53,10 @@ object AppSettings {
 
     suspend fun load(store: CredentialStore = getCredentialStore()) {
         use24HourClock = store.getUse24HourClock() ?: false
-        // Only overwrite when a mode was actually saved: [primeThemeMode] may
-        // already have restored one from the unencrypted hint, and the async
-        // read must not undo it on the way up.
-        store.getThemeMode()?.let { themeMode = ThemeMode.fromId(it) }
+        // Only overwrite when something was actually saved: primeThemeMode may
+        // already have restored the values, and the async read must not undo
+        // them on the way up.
+        applyStoredTheme(store.getThemeMode(), store.getAmoledDark())
     }
 
     suspend fun setUse24HourClock(enabled: Boolean, store: CredentialStore = getCredentialStore()) {
@@ -48,25 +69,43 @@ object AppSettings {
         store.saveThemeMode(mode.id)
     }
 
+    suspend fun setAmoledDark(enabled: Boolean, store: CredentialStore = getCredentialStore()) {
+        amoledDark = enabled
+        store.saveAmoledDark(enabled)
+    }
+
     /**
-     * Restore the saved theme from the unencrypted mirror, synchronously.
+     * Restore the saved selection from the unencrypted mirror, synchronously.
      *
      * Called before the first composition: building the encrypted store's master
      * key takes long enough that an async load would paint a frame of the wrong
      * theme first — a black flash for anyone on light mode.
      */
     fun primeThemeMode(store: CredentialStore = getCredentialStore()) {
-        themeMode = ThemeMode.fromId(store.peekThemeMode())
+        applyStoredTheme(store.peekThemeMode(), store.peekAmoledDark())
     }
 
     /**
-     * Seed [systemDark] with the current configuration, before the first
-     * composition. Read from the platform side (MainActivity passes the
-     * uiMode night flag) because commonMain has no configuration to read.
+     * Seed the state from the persisted pair. Nulls leave the current value
+     * alone, so a half-written store never resets the look mid-session.
      */
+    private fun applyStoredTheme(storedId: String?, storedAmoled: Boolean?) {
+        if (storedId != null) {
+            themeMode = ThemeMode.fromId(storedId)
+            // "amoled" used to be a mode of its own; it is a modifier of dark now.
+            amoledDark = if (storedId == LEGACY_AMOLED_ID) true else storedAmoled ?: amoledDark
+        } else {
+            storedAmoled?.let { amoledDark = it }
+        }
+    }
+
+    /** Seeded by the platform before the first composition. See [systemDark]. */
     fun primeSystemDark(isDark: Boolean) {
         systemDark = isDark
     }
+
+    /** Id written by the builds that shipped Amoled as a fourth mode. */
+    private const val LEGACY_AMOLED_ID = "amoled"
 }
 
 /**
