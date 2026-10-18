@@ -1,14 +1,15 @@
 package com.vignan.tracker
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,19 +17,24 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -45,11 +51,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -111,8 +118,8 @@ fun SettingsScreen(
 
         // ------------------------------------------------------------ theme
         SettingsSection(title = "THEME") {
-            ThemePicker(
-                selected = AppSettings.themeMode,
+            ThemeField(
+                value = AppSettings.themeMode,
                 onSelect = { mode -> scope.launch { AppSettings.setThemeMode(mode) } }
             )
         }
@@ -187,138 +194,194 @@ fun SettingsScreen(
 // ---------------------------------------------------------------- building blocks
 
 /**
- * Native-style theme list: one tappable row per option, the current one
- * highlighted with a trailing check. "Amoled dark" is deliberately not a
- * fourth top-level choice — it unfolds from under Dark only while Dark's
- * branch is open, so the extra look never crowds the three real options.
+ * "Theme" row with the current look named on the right; tapping opens the
+ * same picker window the attendance month field uses (field box, rotating
+ * caret, anchored menu).
+ *
+ * "Amoled dark" stays folded under Dark: its entry unfolds from the Dark
+ * entry only while Dark's branch is the current selection, so the fourth
+ * look never crowds the three real options.
  */
 @Composable
-private fun ThemePicker(
-    selected: ThemeMode,
+private fun ThemeField(
+    value: ThemeMode,
     onSelect: (ThemeMode) -> Unit
 ) {
-    Column(
+    var expanded by remember { mutableStateOf(false) }
+
+    val caretRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "themeCaretRotation"
+    )
+
+    val showAmoled = value == ThemeMode.DARK || value == ThemeMode.AMOLED
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        ThemeOptionRow(
-            label = ThemeMode.LIGHT.label,
-            isSelected = selected == ThemeMode.LIGHT,
-            onSelect = { onSelect(ThemeMode.LIGHT) }
-        )
-        ThemeOptionRow(
-            label = ThemeMode.DARK.label,
-            isSelected = selected == ThemeMode.DARK,
-            onSelect = { onSelect(ThemeMode.DARK) }
-        )
+        val menuWidth = maxWidth
 
-        // The extra look slides out of the Dark row itself: it expands from
-        // the top edge while travelling down a third of its own height, so it
-        // reads as Dark revealing a sub-option rather than a new list item.
-        AnimatedVisibility(
-            visible = selected == ThemeMode.DARK || selected == ThemeMode.AMOLED,
-            enter = expandVertically(expandFrom = Alignment.Top) +
-                slideInVertically(initialOffsetY = { -it / 3 }) +
-                fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) +
-                slideOutVertically(targetOffsetY = { -it / 3 }) +
-                fadeOut()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(TrackerColors.SurfaceInput)
+                .border(
+                    1.dp,
+                    if (expanded) TrackerColors.BorderFocused else TrackerColors.HairlineBorder,
+                    RoundedCornerShape(10.dp)
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { expanded = !expanded }
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            ThemeOptionRow(
-                label = ThemeMode.AMOLED.label,
-                isSelected = selected == ThemeMode.AMOLED,
-                onSelect = { onSelect(ThemeMode.AMOLED) },
-                modifier = Modifier.padding(start = 16.dp)
-            )
-        }
-
-        ThemeOptionRow(
-            label = ThemeMode.SYSTEM.label,
-            detail = "Follows the device · currently " +
-                (if (AppSettings.systemDark) "Dark" else "Light"),
-            isSelected = selected == ThemeMode.SYSTEM,
-            onSelect = { onSelect(ThemeMode.SYSTEM) }
-        )
-    }
-}
-
-/**
- * One picker row: highlighted surface plus trailing check on the selected
- * option, the shape Android and iOS both use for a single-choice setting.
- */
-@Composable
-private fun ThemeOptionRow(
-    label: String,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    detail: String? = null,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) TrackerColors.SurfaceElevated else Color.Transparent)
-            .selectable(
-                selected = isSelected,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                role = Role.RadioButton
-            ) { onSelect() }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = label,
+                text = "Theme",
                 color = TrackerColors.TextPrimary,
                 fontSize = 15.sp,
-                fontFamily = FontFamily.SansSerif
+                fontFamily = FontFamily.SansSerif,
+                modifier = Modifier.weight(1f)
             )
-            if (detail != null) {
-                Text(
-                    text = detail,
-                    color = TrackerColors.TextMuted,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier.padding(top = 3.dp)
+            Text(
+                text = value.label,
+                color = TrackerColors.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (expanded) TrackerColors.SurfaceElevated else Color.Transparent
+                    )
+                    .graphicsLayer { rotationZ = caretRotation },
+                contentAlignment = Alignment.Center
+            ) {
+                CaretDown(
+                    tint = if (expanded) TrackerColors.TextSecondary
+                    else TrackerColors.TextMuted
                 )
             }
         }
 
-        AnimatedVisibility(
-            visible = isSelected,
-            enter = fadeIn() + scaleIn(initialScale = 0.6f),
-            exit = fadeOut() + scaleOut(targetScale = 0.6f)
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = TrackerColors.SurfaceElevated,
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight),
+            offset = DpOffset(0.dp, 0.dp),
+            modifier = Modifier.width(menuWidth)
         ) {
-            CheckGlyph()
+            Column(modifier = Modifier.heightIn(max = 300.dp)) {
+                ThemeMenuEntry(
+                    label = ThemeMode.LIGHT.label,
+                    isSelected = value == ThemeMode.LIGHT,
+                    onClick = { onSelect(ThemeMode.LIGHT); expanded = false }
+                )
+                ThemeMenuEntry(
+                    label = ThemeMode.DARK.label,
+                    isSelected = value == ThemeMode.DARK,
+                    onClick = { onSelect(ThemeMode.DARK); expanded = false }
+                )
+
+                // Slides out from under Dark itself — expand + a third-of-height
+                // travel, so it reads as Dark revealing a sub-option.
+                AnimatedVisibility(
+                    visible = showAmoled,
+                    enter = expandVertically(expandFrom = Alignment.Top) +
+                        slideInVertically(initialOffsetY = { -it / 3 }) +
+                        fadeIn(),
+                    exit = shrinkVertically(shrinkTowards = Alignment.Top) +
+                        slideOutVertically(targetOffsetY = { -it / 3 }) +
+                        fadeOut()
+                ) {
+                    ThemeMenuEntry(
+                        label = ThemeMode.AMOLED.label,
+                        isSelected = value == ThemeMode.AMOLED,
+                        onClick = { onSelect(ThemeMode.AMOLED); expanded = false },
+                        modifier = Modifier.padding(start = 20.dp)
+                    )
+                }
+
+                ThemeMenuEntry(
+                    label = ThemeMode.SYSTEM.label,
+                    detail = "Follows the device · currently " +
+                        (if (AppSettings.systemDark) "Dark" else "Light"),
+                    isSelected = value == ThemeMode.SYSTEM,
+                    onClick = { onSelect(ThemeMode.SYSTEM); expanded = false }
+                )
+            }
         }
     }
 }
 
-/** Round-capped check, drawn like the glyphs in ScreenHeader. */
+/** One line in the theme picker window, styled like the month picker's. */
 @Composable
-private fun CheckGlyph(
-    modifier: Modifier = Modifier,
-    color: Color = TrackerColors.PrimaryWhite
+private fun ThemeMenuEntry(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    detail: String? = null,
+    modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier.size(18.dp)) {
+    DropdownMenuItem(
+        modifier = modifier,
+        text = {
+            Column {
+                Text(
+                    text = label,
+                    color = if (isSelected) TrackerColors.PrimaryWhite
+                    else TrackerColors.TextSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (detail != null) {
+                    Text(
+                        text = detail,
+                        color = TrackerColors.TextMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+        },
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        onClick = onClick
+    )
+}
+
+/** Small rounded chevron used as the dropdown affordance. */
+@Composable
+private fun CaretDown(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(9.dp)) {
         val w = size.width
+        val h = size.height
         val path = Path().apply {
-            moveTo(w * 0.24f, w * 0.52f)
-            lineTo(w * 0.43f, w * 0.71f)
-            lineTo(w * 0.77f, w * 0.31f)
+            moveTo(w * 0.12f, h * 0.30f)
+            lineTo(w * 0.5f, h * 0.70f)
+            lineTo(w * 0.88f, h * 0.30f)
         }
         drawPath(
             path = path,
-            color = color,
-            style = Stroke(
-                width = 1.8.dp.toPx(),
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-            )
+            color = tint,
+            style = Stroke(width = w * 0.18f, cap = StrokeCap.Round)
         )
     }
 }
