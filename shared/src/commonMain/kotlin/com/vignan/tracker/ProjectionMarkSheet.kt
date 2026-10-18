@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -176,7 +177,6 @@ private fun CalendarGlyph(modifier: Modifier = Modifier, tint: Color = TrackerCo
  * to drop it, or pick several and Apply to add them. Apply with nothing
  * selected clears that kind outright, which is why the button renames itself.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
     val accent = kind.accent()
@@ -190,27 +190,18 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
 
     val today = remember { java.util.Calendar.getInstance().timeInMillis }
     val thisMonth = remember(today) { firstOfMonth(today) }
-    // Open at full height: the sheet holds a month grid and one button, and the
-    // half-expanded stop only forced a scroll to reach Apply.
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = TrackerColors.SurfaceDark,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        dragHandle = { SheetDragHandle() }
-    ) {
+    TrackerSheet(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
+                .padding(start = 20.dp, end = 20.dp, bottom = 22.dp)
         ) {
             Text(
                 text = kind.title,
                 color = TrackerColors.TextPrimary,
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.SansSerif
             )
@@ -224,7 +215,7 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
                 fontFamily = FontFamily.SansSerif
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             MonthNavigator(
                 monthMillis = month,
@@ -233,11 +224,11 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
                 onNext = { month = shiftMonth(month, 1) }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             WeekdayHeader()
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             MonthGrid(
                 monthMillis = month,
@@ -249,7 +240,7 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
                 }
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             ApplyButton(
                 selectedCount = draft.size,
@@ -265,11 +256,36 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * The sheet shell every sheet in the app wears: same container, same handle, a
+ * scrim dark enough to read over the near-black page, and a blurred backdrop
+ * where the platform can do it. Opening at full height too, since a sheet that
+ * stops halfway only hides its own button below a scroll.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TrackerSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    SheetBackdropBlur()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = TrackerColors.SurfaceDark,
+        contentColor = TrackerColors.TextPrimary,
+        scrimColor = SheetScrim,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        dragHandle = { SheetDragHandle() },
+        content = content
+    )
+}
+
 @Composable
 private fun SheetDragHandle() {
     Box(
         modifier = Modifier
-            .padding(vertical = 12.dp)
+            .padding(vertical = 9.dp)
             .size(width = 36.dp, height = 4.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(TrackerColors.HairlineBorderLight)
@@ -327,11 +343,11 @@ private fun MonthArrow(label: String, enabled: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * Fixed six rows, seven columns: a month always fills the same box, so paging
- * through months cannot make the sheet jump.
+ * The week rows are counted per month rather than fixed at six: October 2026
+ * needs four leading blanks and five rows, and a reserved sixth would leave an
+ * empty strip between the last week and Apply. The cost is a sheet that is one
+ * row taller in the months that need it.
  */
-private const val CALENDAR_CELLS = 42
-
 @Composable
 private fun WeekdayHeader() {
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -381,9 +397,10 @@ private fun MonthGrid(
         }
     }
     val todayKey = remember(todayMillis) { projectionDateKey(todayMillis) }
+    val weekCount = (leadingBlanks + daysInMonth + 6) / 7
 
     Column {
-        repeat(CALENDAR_CELLS / 7) { week ->
+        repeat(weekCount) { week ->
             Row(modifier = Modifier.fillMaxWidth()) {
                 repeat(7) { column ->
                     val dayOfMonth = week * 7 + column - leadingBlanks + 1
@@ -413,7 +430,7 @@ private fun MonthGrid(
     }
 }
 
-private val CELL_HEIGHT = 38.dp
+private val CELL_HEIGHT = 36.dp
 
 @Composable
 private fun DayCell(
@@ -494,23 +511,14 @@ private fun ApplyButton(selectedCount: Int, onClick: () -> Unit) {
  * idea. Kept deliberately terse — it explains two gestures and a range choice,
  * and nothing else needs saying.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = TrackerColors.SurfaceDark,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        dragHandle = { SheetDragHandle() }
-    ) {
+    TrackerSheet(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
         ) {
             Text(
                 text = "Attendance projection",
