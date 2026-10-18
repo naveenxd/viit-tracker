@@ -304,7 +304,7 @@ private fun MonthNavigator(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MonthArrow(label = "‹", enabled = canGoBack, onClick = onPrevious)
+        MonthArrow(pointsLeft = true, enabled = canGoBack, onClick = onPrevious)
 
         Text(
             text = monthLabel(monthMillis),
@@ -314,12 +314,22 @@ private fun MonthNavigator(
             fontFamily = FontFamily.Monospace
         )
 
-        MonthArrow(label = "›", enabled = true, onClick = onNext)
+        MonthArrow(pointsLeft = false, enabled = true, onClick = onNext)
     }
 }
 
+/**
+ * Month paging arrow.
+ *
+ * Drawn rather than typeset: the "‹" and "›" glyphs come out a different size,
+ * weight and optical centre in every font, which is why the two arrows never
+ * quite matched each other or the circles around them. Two strokes at the app's
+ * glyph weight are the same shape in every theme and on every device.
+ */
 @Composable
-private fun MonthArrow(label: String, enabled: Boolean, onClick: () -> Unit) {
+private fun MonthArrow(pointsLeft: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val tint = if (enabled) TrackerColors.TextSecondary else TrackerColors.TextSubtle.copy(alpha = 0.4f)
+
     Box(
         modifier = Modifier
             .size(30.dp)
@@ -332,13 +342,18 @@ private fun MonthArrow(label: String, enabled: Boolean, onClick: () -> Unit) {
             .clickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            color = if (enabled) TrackerColors.TextSecondary else TrackerColors.TextSubtle.copy(alpha = 0.4f),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
+        Canvas(modifier = Modifier.size(14.dp)) {
+            val sw = 1.5.dp.toPx()
+            val w = size.width
+            val h = size.height
+            // The tip leads towards the month it pages to; the tails sit behind
+            // it, so both arrows lean the same amount off centre.
+            val tip = if (pointsLeft) w * 0.34f else w * 0.66f
+            val tail = if (pointsLeft) w * 0.64f else w * 0.36f
+
+            drawLine(tint, Offset(tail, h * 0.20f), Offset(tip, h * 0.5f), sw, StrokeCap.Round)
+            drawLine(tint, Offset(tip, h * 0.5f), Offset(tail, h * 0.80f), sw, StrokeCap.Round)
+        }
     }
 }
 
