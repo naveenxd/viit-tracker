@@ -1,5 +1,6 @@
 package com.vignan.tracker
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +30,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -100,6 +108,7 @@ private fun MarkButton(
     modifier: Modifier = Modifier
 ) {
     val marked = count > 0
+    val tint = if (marked) accent else TrackerColors.TextSecondary
 
     Box(
         modifier = modifier
@@ -114,14 +123,48 @@ private fun MarkButton(
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = if (marked) "$label  ·  $count" else label,
-            color = if (marked) accent else TrackerColors.TextSecondary,
-            fontSize = 12.sp,
-            fontWeight = if (marked) FontWeight.Bold else FontWeight.Medium,
-            fontFamily = FontFamily.SansSerif,
-            maxLines = 1
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CalendarGlyph(tint = tint)
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = if (marked) "$label  ·  $count" else label,
+                color = tint,
+                fontSize = 12.sp,
+                fontWeight = if (marked) FontWeight.Bold else FontWeight.Medium,
+                fontFamily = FontFamily.SansSerif,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * Calendar mark for the two buttons: frame, header band and the two binder
+ * rings, drawn at the same 1.4dp weight as every other glyph in the app so the
+ * button row reads as one family with the tab bar and header icons.
+ */
+@Composable
+private fun CalendarGlyph(modifier: Modifier = Modifier, tint: Color = TrackerColors.TextSecondary) {
+    Canvas(modifier = modifier.size(14.dp)) {
+        val sw = 1.4.dp.toPx()
+        val corner = 2.dp.toPx()
+        val inset = sw / 2f
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(inset, inset),
+            size = Size(w - sw, h - sw),
+            cornerRadius = CornerRadius(corner, corner),
+            style = stroke
         )
+        drawLine(tint, Offset(inset, h * 0.38f), Offset(w - inset, h * 0.38f), sw * 0.9f)
+        drawLine(tint, Offset(w * 0.32f, 0f), Offset(w * 0.32f, h * 0.20f), sw, StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.68f, 0f), Offset(w * 0.68f, h * 0.20f), sw, StrokeCap.Round)
     }
 }
 
@@ -147,9 +190,13 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
 
     val today = remember { java.util.Calendar.getInstance().timeInMillis }
     val thisMonth = remember(today) { firstOfMonth(today) }
+    // Open at full height: the sheet holds a month grid and one button, and the
+    // half-expanded stop only forced a scroll to reach Apply.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = TrackerColors.SurfaceDark,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         dragHandle = { SheetDragHandle() }
@@ -443,14 +490,18 @@ private fun ApplyButton(selectedCount: Int, onClick: () -> Unit) {
 // ---------------------------------------------------------------- help sheet
 
 /**
- * Usage sheet behind the header's "i": what the forecast is, what each gesture
- * does, and where the calendar buttons fit in.
+ * Usage sheet behind the header's "i": what the forecast is, in one line per
+ * idea. Kept deliberately terse — it explains two gestures and a range choice,
+ * and nothing else needs saying.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = TrackerColors.SurfaceDark,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         dragHandle = { SheetDragHandle() }
@@ -464,7 +515,7 @@ internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
             Text(
                 text = "Attendance projection",
                 color = TrackerColors.TextPrimary,
-                fontSize = 18.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.SansSerif
             )
@@ -472,41 +523,30 @@ internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "A forecast, not a record: it assumes you attend everything still scheduled.",
+                text = "Where your attendance lands each day if you attend everything " +
+                    "still scheduled. The buffer column is what you can still skip.",
                 color = TrackerColors.TextSubtle,
                 fontSize = 12.sp,
                 fontFamily = FontFamily.SansSerif
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             HelpRow(
-                title = "What it shows",
-                body = "Today, then each day after it, with the attendance you would hold at the " +
-                    "end of that day. The buffer column is how many periods you can still skip " +
-                    "and stay at 75%."
-            )
-            HelpRow(
                 title = "10D · 30D · 60D",
-                body = "How far ahead to project. Sundays always read as off and add nothing."
+                body = "How far ahead to forecast. Sundays always stay off."
             )
             HelpRow(
                 title = "Swipe left · bunk",
-                body = "Counts that day's classes as held but not attended. Swipe left again to restore it."
+                body = "The day's classes count as held, not attended. Swipe again to restore."
             )
             HelpRow(
                 title = "Swipe right · holiday",
-                body = "Treats the day as shut, the same as a Sunday: no classes are added at all."
+                body = "The day is shut, like a Sunday: nothing is added at all."
             )
             HelpRow(
                 title = "Mark leaves · mark holidays",
-                body = "The two buttons above open a calendar to pick several dates at once. " +
-                    "Leaves are bunked days; holidays are days off. Reset clears both."
-            )
-            HelpRow(
-                title = "A note on the marks",
-                body = "They last for this session and shape only the forecast — your portal " +
-                    "attendance is never touched."
+                body = "Pick dates in a calendar. Leaves bunk them, holidays close them."
             )
         }
     }

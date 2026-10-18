@@ -3,6 +3,7 @@ package com.vignan.tracker
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,7 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -540,24 +544,45 @@ fun ProjectionCard(
     }
 }
 
-/** Small circled "i" over the range chips: opens the projection's usage sheet. */
+/**
+ * Info affordance over the range chips: a drawn circled "i" at the app's glyph
+ * weight, in a 30dp touch target. Sized to the chips' right edge so it sits
+ * flush with the control it explains instead of floating over the card.
+ */
 @Composable
 private fun ProjectionInfoButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(20.dp)
+            .size(30.dp)
             .clip(CircleShape)
-            .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "i",
-            color = TrackerColors.TextMuted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
+        Canvas(modifier = Modifier.size(17.dp)) {
+            val sw = 1.4.dp.toPx()
+            val w = size.width
+            val h = size.height
+
+            drawCircle(
+                color = TrackerColors.TextMuted,
+                radius = (size.minDimension - sw) / 2f,
+                style = Stroke(width = sw)
+            )
+            // Stem and dot, sized off the stroke so the mark stays optically even
+            // with the ring at any size.
+            drawLine(
+                color = TrackerColors.TextMuted,
+                start = Offset(w * 0.5f, h * 0.46f),
+                end = Offset(w * 0.5f, h * 0.74f),
+                strokeWidth = sw,
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = TrackerColors.TextMuted,
+                radius = sw * 0.65f,
+                center = Offset(w * 0.5f, h * 0.29f)
+            )
+        }
     }
 }
 
