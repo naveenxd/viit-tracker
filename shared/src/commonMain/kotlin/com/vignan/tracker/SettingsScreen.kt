@@ -1,5 +1,15 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +43,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -97,7 +111,7 @@ fun SettingsScreen(
 
         // ------------------------------------------------------------ theme
         SettingsSection(title = "THEME") {
-            ThemeModeSelector(
+            ThemePicker(
                 selected = AppSettings.themeMode,
                 onSelect = { mode -> scope.launch { AppSettings.setThemeMode(mode) } }
             )
@@ -173,81 +187,138 @@ fun SettingsScreen(
 // ---------------------------------------------------------------- building blocks
 
 /**
- * Three-way theme picker. Each segment previews the mode it selects — page
- * colour behind, card colour in front — so the choice is legible before it is
- * made, and the control re-colours itself the instant it is applied.
+ * Native-style theme list: one tappable row per option, the current one
+ * highlighted with a trailing check. "Amoled dark" is deliberately not a
+ * fourth top-level choice — it unfolds from under Dark only while Dark's
+ * branch is open, so the extra look never crowds the three real options.
  */
 @Composable
-private fun ThemeModeSelector(
+private fun ThemePicker(
     selected: ThemeMode,
     onSelect: (ThemeMode) -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        ThemeMode.entries.forEach { mode ->
-            val isSelected = mode == selected
-            val swatch = themeSwatch(mode)
+        ThemeOptionRow(
+            label = ThemeMode.LIGHT.label,
+            isSelected = selected == ThemeMode.LIGHT,
+            onSelect = { onSelect(ThemeMode.LIGHT) }
+        )
+        ThemeOptionRow(
+            label = ThemeMode.DARK.label,
+            isSelected = selected == ThemeMode.DARK,
+            onSelect = { onSelect(ThemeMode.DARK) }
+        )
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (isSelected) TrackerColors.SurfaceElevated else Color.Transparent
-                    )
-                    .border(
-                        1.dp,
-                        if (isSelected) TrackerColors.HairlineBorderLight else Color.Transparent,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .selectable(
-                        selected = isSelected,
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        role = Role.RadioButton
-                    ) { onSelect(mode) }
-                    .padding(vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                ThemeSwatchBadge(swatch)
+        // The extra look slides out of the Dark row itself: it expands from
+        // the top edge while travelling down a third of its own height, so it
+        // reads as Dark revealing a sub-option rather than a new list item.
+        AnimatedVisibility(
+            visible = selected == ThemeMode.DARK || selected == ThemeMode.AMOLED,
+            enter = expandVertically(expandFrom = Alignment.Top) +
+                slideInVertically(initialOffsetY = { -it / 3 }) +
+                fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) +
+                slideOutVertically(targetOffsetY = { -it / 3 }) +
+                fadeOut()
+        ) {
+            ThemeOptionRow(
+                label = ThemeMode.AMOLED.label,
+                isSelected = selected == ThemeMode.AMOLED,
+                onSelect = { onSelect(ThemeMode.AMOLED) },
+                modifier = Modifier.padding(start = 16.dp)
+            )
+        }
 
-                Spacer(modifier = Modifier.height(7.dp))
+        ThemeOptionRow(
+            label = ThemeMode.SYSTEM.label,
+            detail = "Follows the device · currently " +
+                (if (AppSettings.systemDark) "Dark" else "Light"),
+            isSelected = selected == ThemeMode.SYSTEM,
+            onSelect = { onSelect(ThemeMode.SYSTEM) }
+        )
+    }
+}
 
+/**
+ * One picker row: highlighted surface plus trailing check on the selected
+ * option, the shape Android and iOS both use for a single-choice setting.
+ */
+@Composable
+private fun ThemeOptionRow(
+    label: String,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    detail: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isSelected) TrackerColors.SurfaceElevated else Color.Transparent)
+            .selectable(
+                selected = isSelected,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.RadioButton
+            ) { onSelect() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = TrackerColors.TextPrimary,
+                fontSize = 15.sp,
+                fontFamily = FontFamily.SansSerif
+            )
+            if (detail != null) {
                 Text(
-                    text = mode.label,
-                    color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = detail,
+                    color = TrackerColors.TextMuted,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.SansSerif,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1
+                    modifier = Modifier.padding(top = 3.dp)
                 )
             }
+        }
+
+        AnimatedVisibility(
+            visible = isSelected,
+            enter = fadeIn() + scaleIn(initialScale = 0.6f),
+            exit = fadeOut() + scaleOut(targetScale = 0.6f)
+        ) {
+            CheckGlyph()
         }
     }
 }
 
-/** Miniature of a theme: the page colour with a card resting on it. */
+/** Round-capped check, drawn like the glyphs in ScreenHeader. */
 @Composable
-private fun ThemeSwatchBadge(swatch: ThemeSwatch) {
-    Box(
-        modifier = Modifier
-            .size(20.dp)
-            .clip(RoundedCornerShape(5.dp))
-            .background(swatch.page)
-            .border(1.dp, swatch.hairline, RoundedCornerShape(5.dp))
-            .padding(2.dp),
-        contentAlignment = Alignment.BottomEnd
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(swatch.card)
+private fun CheckGlyph(
+    modifier: Modifier = Modifier,
+    color: Color = TrackerColors.PrimaryWhite
+) {
+    Canvas(modifier = modifier.size(18.dp)) {
+        val w = size.width
+        val path = Path().apply {
+            moveTo(w * 0.24f, w * 0.52f)
+            lineTo(w * 0.43f, w * 0.71f)
+            lineTo(w * 0.77f, w * 0.31f)
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(
+                width = 1.8.dp.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
+            )
         )
     }
 }

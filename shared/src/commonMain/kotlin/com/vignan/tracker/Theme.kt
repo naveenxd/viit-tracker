@@ -178,21 +178,6 @@ private fun paletteFor(mode: ThemeMode): Palette = when (mode) {
 }
 
 /**
- * The page / card / hairline colours of one mode, regardless of which mode is
- * active. The settings picker draws these as a miniature of each look.
- */
-internal data class ThemeSwatch(val page: Color, val card: Color, val hairline: Color)
-
-internal fun themeSwatch(mode: ThemeMode): ThemeSwatch {
-    val palette = paletteFor(mode)
-    return ThemeSwatch(
-        page = palette.pureBlack,
-        card = palette.surfaceDark,
-        hairline = palette.hairlineBorderLight
-    )
-}
-
-/**
  * The palette in force.
  *
  * These used to be plain `val`s on a singleton. They are getters now because
