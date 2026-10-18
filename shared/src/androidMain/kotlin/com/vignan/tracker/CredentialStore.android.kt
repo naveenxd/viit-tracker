@@ -95,7 +95,13 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
     }
 
     override suspend fun getThemeMode(): String? {
-        val prefs = getPrefs() ?: return peekThemeMode()
+        // The unencrypted mirror is authoritative: saveThemeMode writes it
+        // first, so it can never lag the encrypted copy (a kill between the
+        // two queued writes flushes the mirror ahead of it). Reading the same
+        // value as primeThemeMode keeps the field and the palette from ever
+        // disagreeing about the active mode.
+        peekThemeMode()?.let { return it }
+        val prefs = getPrefs() ?: return null
         return prefs.getString("theme_mode", null)
     }
 
