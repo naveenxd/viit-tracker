@@ -27,6 +27,11 @@ class MainActivity : ComponentActivity() {
         // store during activity init already sees a valid context.
         AppContextProvider.context = applicationContext
 
+        // Synchronous, before the first frame: the saved theme decides what the
+        // very first composition paints, and the encrypted store is too slow to
+        // answer in time.
+        AppSettings.primeThemeMode()
+
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
