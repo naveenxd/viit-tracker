@@ -93,6 +93,31 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         val prefs = getPrefs() ?: return
         prefs.edit().putBoolean("use_24h_clock", enabled).apply()
     }
+
+    override suspend fun getThemeMode(): String? {
+        val prefs = getPrefs() ?: return peekThemeMode()
+        return prefs.getString("theme_mode", null)
+    }
+
+    override suspend fun saveThemeMode(id: String) {
+        // Mirror first: this is the copy the next cold start reads synchronously,
+        // so it must be on disk even if the encrypted write below never lands.
+        contextProvider()?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?.edit()?.putString("theme_mode", id)?.apply()
+
+        val prefs = getPrefs() ?: return
+        prefs.edit().putString("theme_mode", id).apply()
+    }
+
+    override fun peekThemeMode(): String? =
+        contextProvider()
+            ?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?.getString("theme_mode", null)
+
+    private companion object {
+        /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
+        const val UI_PREFS = "viit_ui_prefs"
+    }
 }
 
 private val androidStore = AndroidCredentialStore { AppContextProvider.context }

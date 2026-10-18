@@ -21,6 +21,17 @@ interface CredentialStore {
     /** Display preference: 24-hour vs the college's 12-hour clock. Null when never chosen. */
     suspend fun getUse24HourClock(): Boolean?
     suspend fun saveUse24HourClock(enabled: Boolean)
+
+    /** Display preference: which of the three themes is active. Null when never chosen. */
+    suspend fun getThemeMode(): String?
+    suspend fun saveThemeMode(id: String)
+
+    /**
+     * Non-suspending peek at the theme, from a plain unencrypted mirror of the
+     * value above. The theme has to be correct on the very first frame, and
+     * opening the encrypted store is far too slow for that.
+     */
+    fun peekThemeMode(): String?
 }
 
 expect fun getCredentialStore(): CredentialStore
