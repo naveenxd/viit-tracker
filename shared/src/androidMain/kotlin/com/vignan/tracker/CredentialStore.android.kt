@@ -142,6 +142,20 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         return if (prefs.contains("amoled_dark")) prefs.getBoolean("amoled_dark", false) else null
     }
 
+    override suspend fun getRegisterTotalsPinned(): Boolean? {
+        val prefs = getPrefs() ?: return null
+        return if (prefs.contains("register_totals_pinned")) {
+            prefs.getBoolean("register_totals_pinned", false)
+        } else {
+            null
+        }
+    }
+
+    override suspend fun saveRegisterTotalsPinned(enabled: Boolean) {
+        val prefs = getPrefs() ?: return
+        prefs.edit().putBoolean("register_totals_pinned", enabled).apply()
+    }
+
     private companion object {
         /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
         const val UI_PREFS = "viit_ui_prefs"

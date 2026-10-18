@@ -31,6 +31,13 @@ interface CredentialStore {
     suspend fun saveAmoledDark(enabled: Boolean)
 
     /**
+     * Register layout: whether the totals columns are pinned to the right edge.
+     * Null when never chosen.
+     */
+    suspend fun getRegisterTotalsPinned(): Boolean?
+    suspend fun saveRegisterTotalsPinned(enabled: Boolean)
+
+    /**
      * Non-suspending peek at the theme, from a plain unencrypted mirror of the
      * value above. The theme has to be correct on the very first frame, and
      * opening the encrypted store is far too slow for that.

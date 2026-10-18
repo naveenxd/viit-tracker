@@ -71,22 +71,6 @@ private object RegisterCache {
 }
 
 /**
- * Register layout preferences, kept for the process lifetime.
- *
- * Deliberately has no on-screen control yet: a future Settings screen flips
- * these directly. Snapshot state, so every reader recomposes when they change.
- */
-internal object RegisterPreferences {
-    /**
-     * Where the per-subject totals columns (ATTED/HELD and %) live in the RAW
-     * matrix. false (default): appended as the LAST columns of the horizontal
-     * scroll, after the final date. true: pinned to the right edge while the
-     * date columns scroll underneath.
-     */
-    var totalsPinned by mutableStateOf(false)
-}
-
-/**
  * Academic register screen — the full day-by-day attendance matrix.
  *
  * PARSED: one card per recorded day, listing every subject with its P/A token.
@@ -391,7 +375,7 @@ private val RAW_HEADER_H = 42.dp
 private val RAW_MIN_CELL_W = 36.dp
 // Totals columns (ATTED/HELD and %), sized for their widest values at 10.sp
 // mono: "100/100" and "100.00" plus cell padding. They trail at the end of the
-// scroll by default, or pin right via RegisterPreferences.totalsPinned.
+// scroll by default, or pin right via AppSettings.registerTotalsPinned.
 private val RAW_TOTALS_COL_W = 54.dp
 private val RAW_PCT_COL_W = 48.dp
 
@@ -407,9 +391,9 @@ private val RAW_PCT_COL_W = 48.dp
  *
  * The per-subject totals the portal now ships (attended/held + percentage)
  * default to the END of the scroll — two more columns after the last date.
- * RegisterPreferences.totalsPinned flips them to pinned columns on the right
- * (they then stay put while the dates scroll underneath, same as the frozen
- * subject column on the left).
+ * AppSettings.registerTotalsPinned, flipped from Settings, pins them to the
+ * right edge instead (they then stay put while the dates scroll underneath,
+ * same as the frozen subject column on the left).
  *
  * Vertically the whole matrix scrolls inside the card: a student with many
  * subjects would otherwise overflow the screen.
@@ -419,8 +403,8 @@ private fun RegisterRawView(register: AttendanceRegisterResponse) {
     val dates = register.datesTracked
     val subjects = register.subjects
 
-    // Totals placement (settings-driven); read here so flipping it recomposes.
-    val totalsPinned = RegisterPreferences.totalsPinned
+    // Totals placement (Settings-driven); read here so flipping it recomposes.
+    val totalsPinned = AppSettings.registerTotalsPinned
     // Full grid height: header row plus one row per subject.
     val gridHeight = RAW_HEADER_H + RAW_ROW_H * subjects.size
 

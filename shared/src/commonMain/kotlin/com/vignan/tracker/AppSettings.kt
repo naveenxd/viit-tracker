@@ -22,11 +22,18 @@ object AppSettings {
         private set
 
     /**
-     * The true-black variant, layered on whichever dark appearance is in force
-     * (explicit Dark, or System while the device is dark). Kept separate from
-     * [themeMode] so it survives a detour through the light look.
+     * True-black variant, kept separate from [themeMode] so it can be layered
+     * on any dark appearance and survive a detour through the light look.
      */
     var amoledDark by mutableStateOf(false)
+        private set
+
+    /**
+     * The register's RAW matrix: false (default) trails the per-subject totals
+     * after the last date, true pins them to the right edge while the dates
+     * scroll underneath. Flipped from Settings, not from the matrix itself.
+     */
+    var registerTotalsPinned by mutableStateOf(false)
         private set
 
     /**
@@ -53,6 +60,7 @@ object AppSettings {
 
     suspend fun load(store: CredentialStore = getCredentialStore()) {
         use24HourClock = store.getUse24HourClock() ?: false
+        registerTotalsPinned = store.getRegisterTotalsPinned() ?: false
         // Only overwrite when something was actually saved: primeThemeMode may
         // already have restored the values, and the async read must not undo
         // them on the way up.
@@ -72,6 +80,14 @@ object AppSettings {
     suspend fun setAmoledDark(enabled: Boolean, store: CredentialStore = getCredentialStore()) {
         amoledDark = enabled
         store.saveAmoledDark(enabled)
+    }
+
+    suspend fun setRegisterTotalsPinned(
+        enabled: Boolean,
+        store: CredentialStore = getCredentialStore()
+    ) {
+        registerTotalsPinned = enabled
+        store.saveRegisterTotalsPinned(enabled)
     }
 
     /**

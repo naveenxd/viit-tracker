@@ -84,6 +84,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var showSignOutConfirm by remember { mutableStateOf(false) }
     val use24Hour = AppSettings.use24HourClock
+    val registerPinned = AppSettings.registerTotalsPinned
     val version = remember { getPlatform().appVersion }
 
     Column(
@@ -162,6 +163,21 @@ fun SettingsScreen(
                 checked = use24Hour,
                 onCheckedChange = { enabled ->
                     scope.launch { AppSettings.setUse24HourClock(enabled) }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // --------------------------------------------------------- register
+        SettingsSection(title = "REGISTER") {
+            SettingsToggleRow(
+                label = "Pin totals",
+                detail = if (registerPinned) "ATTED/HELD and % stay put"
+                else "ATTED/HELD and % trail the last day",
+                checked = registerPinned,
+                onCheckedChange = { enabled ->
+                    scope.launch { AppSettings.setRegisterTotalsPinned(enabled) }
                 }
             )
         }
