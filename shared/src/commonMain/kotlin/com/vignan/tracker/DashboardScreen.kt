@@ -93,6 +93,8 @@ fun DashboardScreen(
     // Settings is an in-place full-screen surface, not a nav destination: the
     // app has no navigation stack, and every tab's header gear just flips this.
     var showSettings by remember { mutableStateOf(false) }
+    // Which calendar sheet the projection's mark buttons opened, if any.
+    var markSheet by remember { mutableStateOf<MarkKind?>(null) }
 
     // The real UI is always composed; data fills in when the response arrives.
     val subjects = data?.subjects ?: emptyList()
@@ -202,6 +204,10 @@ fun DashboardScreen(
                     }
 
                     item {
+                        ProjectionMarkButtons(onOpen = { markSheet = it })
+                    }
+
+                    item {
                         ProjectionCard(
                             liveResponse = liveResponse,
                             hasData = hasData
@@ -241,6 +247,12 @@ fun DashboardScreen(
                 }
             }
         }
+        }
+
+        // Rendered at the screen root, not inside the lazy list: the sheet is modal
+        // and must not scroll away with the card its buttons belong to.
+        markSheet?.let { kind ->
+            ProjectionMarkSheet(kind = kind, onDismiss = { markSheet = null })
         }
 
         // Floating pill navigation bar

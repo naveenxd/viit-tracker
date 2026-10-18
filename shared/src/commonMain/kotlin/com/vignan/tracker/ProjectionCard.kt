@@ -67,6 +67,64 @@ data class ProjectionRow(
     val isOffDay: Boolean get() = isSunday || isHoliday
 }
 
+/**
+ * The user's marks on the projection, shared by the card and the calendar sheets
+ * above it, so marking a date in the calendar moves the forecast immediately.
+ *
+ * Session-scoped on purpose, like the absence simulation it grew out of: these
+ * are "what if" marks, not real attendance records.
+ *
+ * The two sets are mutually exclusive — a day is either bunked (held but not
+ * attended) or off (nothing added at all) — because a date cannot be read both
+ * ways.
+ */
+internal object ProjectionMarks {
+    /** Left swipe, or a date marked as leave in the calendar. */
+    var absentDates by mutableStateOf(setOf<String>())
+        private set
+
+    /** Right swipe, or a date marked as a holiday in the calendar. */
+    var holidayDates by mutableStateOf(setOf<String>())
+        private set
+
+    val isEmpty: Boolean get() = absentDates.isEmpty() && holidayDates.isEmpty()
+
+    fun toggleAbsent(dateKey: String) {
+        absentDates = if (dateKey in absentDates) absentDates - dateKey else absentDates + dateKey
+        holidayDates = holidayDates - dateKey
+    }
+
+    fun toggleHoliday(dateKey: String) {
+        holidayDates = if (dateKey in holidayDates) holidayDates - dateKey else holidayDates + dateKey
+        absentDates = absentDates - dateKey
+    }
+
+    /** Replace the bunked dates wholesale, from the calendar's Apply. */
+    fun setAbsent(dates: Set<String>) {
+        absentDates = dates
+        holidayDates = holidayDates - dates
+    }
+
+    /** Replace the holiday dates wholesale, from the calendar's Apply. */
+    fun setHolidays(dates: Set<String>) {
+        holidayDates = dates
+        absentDates = absentDates - dates
+    }
+
+    fun clear() {
+        absentDates = emptySet()
+        holidayDates = emptySet()
+    }
+}
+
+/** Row/mark key: "d MMM" (e.g. "23 Sep"). Shared by the rows and the mark calendar. */
+internal const val PROJECTION_DATE_PATTERN = "d MMM"
+
+/** [PROJECTION_DATE_PATTERN] applied to a millisecond instant, in device-local time. */
+internal fun projectionDateKey(millis: Long): String =
+    java.text.SimpleDateFormat(PROJECTION_DATE_PATTERN, java.util.Locale.US)
+        .format(java.util.Date(millis))
+
 /** (4·a − 3·h) / 3, floored, never negative — buffer to stay exactly at 75%. */
 private fun skippablePeriods(attended: Int, held: Int): Int =
     ((4 * attended - 3 * held) / 3).coerceAtLeast(0)
@@ -154,7 +212,7 @@ fun buildAttendanceProjection(
     val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
     val cal = java.util.Calendar.getInstance()
     // "d MMM" (e.g. "23 Sep") keeps dates compact and guarantees room for labels without clipping
-    val dateFormat = java.text.SimpleDateFormat("d MMM", java.util.Locale.US)
+    val dateFormat = java.text.SimpleDateFormat(PROJECTION_DATE_PATTERN, java.util.Locale.US)
 
     var attended = agg.attended
     var held = agg.held
@@ -271,10 +329,11 @@ fun ProjectionCard(
     modifier: Modifier = Modifier
 ) {
     var range by remember { mutableStateOf(10) }
-    var absentDates by remember { mutableStateOf(setOf<String>()) }
-    // Days the user marked as holidays: no classes run, so nothing is added to the
-    // tallies — the same effect a Sunday has, only chosen by hand.
-    var holidayDates by remember { mutableStateOf(setOf<String>()) }
+    var showHelp by remember { mutableStateOf(false) }
+    // The marks live in ProjectionMarks so the calendar sheets above the card
+    // write straight into what the forecast reads.
+    val absentDates = ProjectionMarks.absentDates
+    val holidayDates = ProjectionMarks.holidayDates
     // Recompute the projection when the calendar day rolls over, so the "today"
     // row and its remaining classes stay correct without a refetch.
     var dayStamp by remember { mutableStateOf(dayKey(java.util.Calendar.getInstance().time)) }
@@ -304,11 +363,11 @@ fun ProjectionCard(
             .padding(16.dp)
     ) {
         Column {
-            // Header: Title & Subtitle + Bunk Reset / Range Toggle
+            // Header: Title & Subtitle + the help affordance over the Reset / Range chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -343,34 +402,43 @@ fun ProjectionCard(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (absentDates.isNotEmpty() || holidayDates.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(TrackerColors.DangerRoseSubtle)
-                                .clickable {
-                                    absentDates = emptySet()
-                                    holidayDates = emptySet()
-                                }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "RESET",
-                                color = TrackerColors.DangerRose,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
+                // Info icon sits directly above the range chips: the right edge stays
+                // as narrow as the chips, so nothing else in the header shifts.
+                Column(horizontalAlignment = Alignment.End) {
+                    ProjectionInfoButton(onClick = { showHelp = true })
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        PROJECTION_RANGES.forEach { r ->
-                            RangeChip(label = "${r}D", selected = range == r, onClick = { range = r })
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (!ProjectionMarks.isEmpty) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(TrackerColors.DangerRoseSubtle)
+                                    .clickable { ProjectionMarks.clear() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "RESET",
+                                    color = TrackerColors.DangerRose,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            PROJECTION_RANGES.forEach { r ->
+                                RangeChip(
+                                    label = "${r}D",
+                                    selected = range == r,
+                                    onClick = { range = r }
+                                )
+                            }
                         }
                     }
                 }
@@ -457,30 +525,39 @@ fun ProjectionCard(
                             ProjectionLine(
                                 row = row,
                                 isToday = index == 0,
-                                onSwipeBunk = {
-                                    absentDates = if (row.dateText in absentDates) {
-                                        absentDates - row.dateText
-                                    } else {
-                                        absentDates + row.dateText
-                                    }
-                                    // Bunk and holiday are opposite readings of a day;
-                                    // marking one drops the other.
-                                    holidayDates = holidayDates - row.dateText
-                                },
-                                onSwipeHoliday = {
-                                    holidayDates = if (row.dateText in holidayDates) {
-                                        holidayDates - row.dateText
-                                    } else {
-                                        holidayDates + row.dateText
-                                    }
-                                    absentDates = absentDates - row.dateText
-                                }
+                                onSwipeBunk = { ProjectionMarks.toggleAbsent(row.dateText) },
+                                onSwipeHoliday = { ProjectionMarks.toggleHoliday(row.dateText) }
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showHelp) {
+        ProjectionHelpSheet(onDismiss = { showHelp = false })
+    }
+}
+
+/** Small circled "i" over the range chips: opens the projection's usage sheet. */
+@Composable
+private fun ProjectionInfoButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .border(1.dp, TrackerColors.HairlineBorderLight, CircleShape)
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "i",
+            color = TrackerColors.TextMuted,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+        )
     }
 }
 
