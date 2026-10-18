@@ -17,8 +17,18 @@ object AppSettings {
     var use24HourClock by mutableStateOf(false)
         private set
 
-    var themeMode by mutableStateOf(ThemeMode.AMOLED)
+    /** Which look is in force. Defaults to [ThemeMode.SYSTEM]. */
+    var themeMode by mutableStateOf(ThemeMode.SYSTEM)
         private set
+
+    /**
+     * The device's own dark-mode flag — the input [ThemeMode.SYSTEM] resolves
+     * from. [TrackerTheme] refreshes it during composition; [primeSystemDark]
+     * sets it before the first frame so a system-dark device never flashes
+     * light while the app boots.
+     */
+    var systemDark by mutableStateOf(false)
+        internal set
 
     suspend fun load(store: CredentialStore = getCredentialStore()) {
         use24HourClock = store.getUse24HourClock() ?: false
@@ -47,6 +57,15 @@ object AppSettings {
      */
     fun primeThemeMode(store: CredentialStore = getCredentialStore()) {
         themeMode = ThemeMode.fromId(store.peekThemeMode())
+    }
+
+    /**
+     * Seed [systemDark] with the current configuration, before the first
+     * composition. Read from the platform side (MainActivity passes the
+     * uiMode night flag) because commonMain has no configuration to read.
+     */
+    fun primeSystemDark(isDark: Boolean) {
+        systemDark = isDark
     }
 }
 

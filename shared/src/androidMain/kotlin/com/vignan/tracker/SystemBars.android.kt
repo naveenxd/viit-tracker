@@ -1,6 +1,7 @@
 package com.vignan.tracker
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.view.View
@@ -8,7 +9,14 @@ import android.view.WindowInsetsController
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+
+@Composable
+actual fun systemIsDark(): Boolean {
+    val uiMode = LocalConfiguration.current.uiMode
+    return (uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+}
 
 @Composable
 actual fun ApplySystemBarStyle(isLight: Boolean) {

@@ -5,27 +5,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 
 /**
- * The three looks the app ships with.
+ * The looks the app ships with, as offered in Settings.
  *
- * [AMOLED] is the original: true black page, near-black surfaces, so the
- * pixels behind the content are genuinely off. [DARK] keeps the same structure
- * but lifts every surface a visible step off the page — the way most consumer
- * apps render dark mode — so cards read as cards without a bright accent.
- * [LIGHT] is deliberately not white-on-white: a soft grey page under off-white
- * cards, with the accent inverted to ink.
+ * [SYSTEM] is the default: the device's own dark-mode setting decides,
+ * resolving to [DARK] or [LIGHT]. [AMOLED] is opt-in only — a fourth row that
+ * unfolds under [DARK] while that branch is open — so true black (page #000,
+ * surfaces within 0x00–0x17) stays available without being anyone's default.
+ *
+ * [DARK] keeps the same structure as AMOLED but lifts every surface a visible
+ * step off the page — the way most consumer apps render dark mode — so cards
+ * read as cards without a bright accent. [LIGHT] is deliberately not
+ * white-on-white: a soft grey page under off-white cards, with the accent
+ * inverted to ink.
  */
 enum class ThemeMode(val id: String, val label: String) {
-    AMOLED("amoled", "AMOLED"),
+    SYSTEM("system", "System default"),
+    LIGHT("light", "Light"),
     DARK("dark", "Dark"),
-    LIGHT("light", "Light");
+    AMOLED("amoled", "Amoled dark");
 
     companion object {
-        /** Unknown or missing ids fall back to the default look. */
+        /** Unknown or missing ids fall back to the default. */
         fun fromId(id: String?): ThemeMode =
-            entries.firstOrNull { it.id == id } ?: AMOLED
+            entries.firstOrNull { it.id == id } ?: SYSTEM
     }
 }
 
@@ -163,6 +169,9 @@ private val LightPalette = Palette(
 )
 
 private fun paletteFor(mode: ThemeMode): Palette = when (mode) {
+    // SYSTEM reads the device flag as plain state, so a single snapshot read
+    // anywhere in the tree repaints everything when the OS flips dark mode.
+    ThemeMode.SYSTEM -> if (AppSettings.systemDark) DarkPalette else LightPalette
     ThemeMode.AMOLED -> AmoledPalette
     ThemeMode.DARK -> DarkPalette
     ThemeMode.LIGHT -> LightPalette
@@ -270,6 +279,12 @@ private fun trackerColorScheme(): ColorScheme =
 
 @Composable
 fun TrackerTheme(content: @Composable () -> Unit) {
+    // Keep the SYSTEM resolution in step with the OS. [AppSettings.primeSystemDark]
+    // sets it before the first frame; this picks up any later change (system
+    // theme toggle, configuration change) without restarting the app.
+    val systemDark = systemIsDark()
+    SideEffect { AppSettings.systemDark = systemDark }
+
     // Status/navigation bar icons have to flip with the theme: the app draws
     // edge to edge, so a light page under white system icons would vanish.
     ApplySystemBarStyle(isLight = TrackerColors.isLight)

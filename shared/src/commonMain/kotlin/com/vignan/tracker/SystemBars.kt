@@ -11,3 +11,10 @@ import androidx.compose.runtime.Composable
  */
 @Composable
 expect fun ApplySystemBarStyle(isLight: Boolean)
+
+/**
+ * The device's current dark-mode setting — what [ThemeMode.SYSTEM] follows.
+ * Recomposition-safe: reads the live configuration, not a boot-time snapshot.
+ */
+@Composable
+expect fun systemIsDark(): Boolean

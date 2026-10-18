@@ -27,9 +27,14 @@ class MainActivity : ComponentActivity() {
         // store during activity init already sees a valid context.
         AppContextProvider.context = applicationContext
 
-        // Synchronous, before the first frame: the saved theme decides what the
-        // very first composition paints, and the encrypted store is too slow to
-        // answer in time.
+        // Synchronous, before the first frame: the saved theme and the device's
+        // dark-mode flag decide what the very first composition paints, and the
+        // encrypted store is too slow to answer in time.
+        val nightMask = resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        AppSettings.primeSystemDark(
+            nightMask == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        )
         AppSettings.primeThemeMode()
 
         enableEdgeToEdge()
