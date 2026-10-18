@@ -367,88 +367,99 @@ fun ProjectionCard(
             .padding(16.dp)
     ) {
         Column {
-            // Header: Title & Subtitle + the help affordance over the Reset / Range chips
+            // Header in two shared rows: the name and its "i" sit with the range
+            // control up top, the hint (or the mark count) shares the second row
+            // with Reset. Stacking the icon over the chips made the right side a
+            // row taller than the left, which left the hint sitting in dead space.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = "ATTENDANCE PROJECTION",
                         color = TrackerColors.TextMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = when {
-                            absentDates.isEmpty() && holidayDates.isEmpty() ->
-                                "Swipe left to bunk, right for holiday"
-                            else -> buildString {
-                                append("${absentDates.size} bunked")
-                                append(" · ${holidayDates.size} holiday")
-                            }
-                        },
-                        color = when {
-                            absentDates.isNotEmpty() -> TrackerColors.DangerRose
-                            holidayDates.isNotEmpty() -> TrackerColors.WarningAmber
-                            else -> TrackerColors.TextSubtle
-                        },
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.SansSerif,
+                        letterSpacing = 1.sp,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    ProjectionInfoButton(onClick = { showHelp = true })
                 }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-                // Info icon sits directly above the range chips: the right edge stays
-                // as narrow as the chips, so nothing else in the header shifts.
-                Column(horizontalAlignment = Alignment.End) {
-                    ProjectionInfoButton(onClick = { showHelp = true })
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (!ProjectionMarks.isEmpty) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(TrackerColors.DangerRoseSubtle)
-                                    .clickable { ProjectionMarks.clear() }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = "RESET",
-                                    color = TrackerColors.DangerRose,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            PROJECTION_RANGES.forEach { r ->
-                                RangeChip(
-                                    label = "${r}D",
-                                    selected = range == r,
-                                    onClick = { range = r }
-                                )
-                            }
-                        }
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    PROJECTION_RANGES.forEach { r ->
+                        RangeChip(
+                            label = "${r}D",
+                            selected = range == r,
+                            onClick = { range = r }
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(3.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = when {
+                        absentDates.isEmpty() && holidayDates.isEmpty() ->
+                            "Swipe left to bunk, right for holiday"
+                        else -> buildString {
+                            append("${absentDates.size} bunked")
+                            append(" · ${holidayDates.size} holiday")
+                        }
+                    },
+                    color = when {
+                        absentDates.isNotEmpty() -> TrackerColors.DangerRose
+                        holidayDates.isNotEmpty() -> TrackerColors.WarningAmber
+                        else -> TrackerColors.TextSubtle
+                    },
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (!ProjectionMarks.isEmpty) {
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(TrackerColors.DangerRoseSubtle)
+                            .clickable { ProjectionMarks.clear() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "RESET",
+                            color = TrackerColors.DangerRose,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(11.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -545,20 +556,20 @@ fun ProjectionCard(
 }
 
 /**
- * Info affordance over the range chips: a drawn circled "i" at the app's glyph
- * weight, in a 30dp touch target. Sized to the chips' right edge so it sits
- * flush with the control it explains instead of floating over the card.
+ * Info affordance beside the card's name: a drawn circled "i" at the app's glyph
+ * weight. The 24dp target keeps it no taller than the range chips it shares a
+ * row with, so the header stays two tight rows.
  */
 @Composable
 private fun ProjectionInfoButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(30.dp)
+            .size(24.dp)
             .clip(CircleShape)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(17.dp)) {
+        Canvas(modifier = Modifier.size(15.dp)) {
             val sw = 1.4.dp.toPx()
             val w = size.width
             val h = size.height
