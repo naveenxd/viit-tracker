@@ -7,8 +7,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -60,6 +58,15 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+
+/**
+ * Height of a plain settings row (label + trailing control).
+ *
+ * The theme row and the Amoled switch under it are a pair, so they share this
+ * exact height: a 32dp switch row padded to its natural size next to a one-line
+ * theme row read as two different weights of control.
+ */
+private val ROW_HEIGHT = 44.dp
 
 /**
  * Full-screen settings page, reachable from the gear in every tab's header.
@@ -122,6 +129,27 @@ fun SettingsScreen(
                 value = AppSettings.themeMode,
                 onSelect = { mode -> scope.launch { AppSettings.setThemeMode(mode) } }
             )
+
+            // The true-black variant is not a fourth look: it only exists while
+            // something dark is showing (explicit Dark, or System on a dark
+            // device), so it appears beneath the picker instead of in its list.
+            AnimatedVisibility(
+                visible = AppSettings.isDarkNow,
+                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
+            ) {
+                Column {
+                    SettingsDivider()
+
+                    SettingsInlineToggleRow(
+                        label = "Amoled dark",
+                        checked = AppSettings.amoledDark,
+                        onCheckedChange = { enabled ->
+                            scope.launch { AppSettings.setAmoledDark(enabled) }
+                        }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -194,13 +222,10 @@ fun SettingsScreen(
 // ---------------------------------------------------------------- building blocks
 
 /**
- * "Theme" row with the current look named on the right; tapping opens the
- * same picker window the attendance month field uses (field box, rotating
- * caret, anchored menu).
- *
- * "Amoled dark" stays folded under Dark: its entry unfolds from the Dark
- * entry only while Dark's branch is the current selection, so the fourth
- * look never crowds the three real options.
+ * "Theme" row: the current look named on the right, tapping opens the same
+ * picker window the attendance month field uses. The row deliberately carries
+ * no box of its own — the section card already draws the outline, and a second
+ * one inside it read as a nested frame — so only the expanded state tints it.
  */
 @Composable
 private fun ThemeField(
@@ -215,56 +240,46 @@ private fun ThemeField(
         label = "themeCaretRotation"
     )
 
-    val showAmoled = value == ThemeMode.DARK || value == ThemeMode.AMOLED
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val menuWidth = maxWidth
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(46.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(TrackerColors.SurfaceInput)
-                .border(
-                    1.dp,
-                    if (expanded) TrackerColors.BorderFocused else TrackerColors.HairlineBorder,
-                    RoundedCornerShape(10.dp)
+                .height(ROW_HEIGHT)
+                .background(
+                    if (expanded) TrackerColors.SurfaceElevated else Color.Transparent
                 )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { expanded = !expanded }
-                .padding(horizontal = 14.dp),
+                .padding(start = 16.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "Theme",
                 color = TrackerColors.TextPrimary,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontFamily = FontFamily.SansSerif,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = value.label,
                 color = TrackerColors.TextPrimary,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Box(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
                     .background(
-                        if (expanded) TrackerColors.SurfaceElevated else Color.Transparent
+                        if (expanded) TrackerColors.SurfaceInput else Color.Transparent
                     )
                     .graphicsLayer { rotationZ = caretRotation },
                 contentAlignment = Alignment.Center
@@ -296,25 +311,6 @@ private fun ThemeField(
                     isSelected = value == ThemeMode.DARK,
                     onClick = { onSelect(ThemeMode.DARK); expanded = false }
                 )
-
-                // Slides out from under Dark itself — expand + a third-of-height
-                // travel, so it reads as Dark revealing a sub-option.
-                AnimatedVisibility(
-                    visible = showAmoled,
-                    enter = expandVertically(expandFrom = Alignment.Top) +
-                        slideInVertically(initialOffsetY = { -it / 3 }) +
-                        fadeIn(),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Top) +
-                        slideOutVertically(targetOffsetY = { -it / 3 }) +
-                        fadeOut()
-                ) {
-                    ThemeMenuEntry(
-                        label = ThemeMode.AMOLED.label,
-                        isSelected = value == ThemeMode.AMOLED,
-                        onClick = { onSelect(ThemeMode.AMOLED); expanded = false },
-                        modifier = Modifier.padding(start = 20.dp)
-                    )
-                }
 
                 ThemeMenuEntry(
                     label = ThemeMode.SYSTEM.label,
@@ -456,17 +452,57 @@ private fun SettingsToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = TrackerColors.PureBlack,
-                checkedTrackColor = TrackerColors.PrimaryWhite,
-                checkedBorderColor = TrackerColors.PrimaryWhite,
-                uncheckedThumbColor = TrackerColors.TextMuted,
-                uncheckedTrackColor = TrackerColors.SurfaceElevated,
-                uncheckedBorderColor = TrackerColors.HairlineBorderLight
-            )
+            colors = trackerSwitchColors()
         )
     }
 }
+
+/**
+ * One-line switch row at [ROW_HEIGHT], for switches that belong to the row
+ * above them rather than to their own labelled block.
+ */
+@Composable
+private fun SettingsInlineToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(ROW_HEIGHT)
+            .padding(start = 16.dp, end = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = TrackerColors.TextPrimary,
+            fontSize = 14.sp,
+            fontFamily = FontFamily.SansSerif,
+            modifier = Modifier.weight(1f)
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = trackerSwitchColors()
+        )
+    }
+}
+
+/** The app's switch styling: ink track when on, hairline outline when off. */
+@Composable
+private fun trackerSwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = TrackerColors.PureBlack,
+    checkedTrackColor = TrackerColors.PrimaryWhite,
+    checkedBorderColor = TrackerColors.PrimaryWhite,
+    uncheckedThumbColor = TrackerColors.TextMuted,
+    uncheckedTrackColor = TrackerColors.SurfaceElevated,
+    uncheckedBorderColor = TrackerColors.HairlineBorderLight
+)
 
 /** A row that exists to say "not yet" — visibly inert, never tappable. */
 @Composable

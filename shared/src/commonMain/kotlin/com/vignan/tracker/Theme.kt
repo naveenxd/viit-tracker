@@ -9,29 +9,35 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 
 /**
- * The looks the app ships with, as offered in Settings.
+ * The looks offered in Settings.
  *
  * [SYSTEM] is the default: the device's own dark-mode setting decides,
- * resolving to [DARK] or [LIGHT]. [AMOLED] is opt-in only — a fourth row that
- * unfolds under [DARK] while that branch is open — so true black (page #000,
- * surfaces within 0x00–0x17) stays available without being anyone's default.
+ * resolving to [DARK] or [LIGHT]. The true-black variant is not a fourth mode
+ * — it is [AppSettings.amoledDark], a modifier that applies to whichever dark
+ * appearance is in force, so it can never be picked while light is showing.
  *
- * [DARK] keeps the same structure as AMOLED but lifts every surface a visible
- * step off the page — the way most consumer apps render dark mode — so cards
- * read as cards without a bright accent. [LIGHT] is deliberately not
- * white-on-white: a soft grey page under off-white cards, with the accent
- * inverted to ink.
+ * [DARK] keeps the same structure as the true-black look but lifts every
+ * surface a visible step off the page — the way most consumer apps render dark
+ * mode — so cards read as cards without a bright accent. [LIGHT] is
+ * deliberately not white-on-white: a soft grey page under off-white cards,
+ * with the accent inverted to ink.
  */
 enum class ThemeMode(val id: String, val label: String) {
     SYSTEM("system", "System default"),
     LIGHT("light", "Light"),
-    DARK("dark", "Dark"),
-    AMOLED("amoled", "Amoled dark");
+    DARK("dark", "Dark");
 
     companion object {
-        /** Unknown or missing ids fall back to the default. */
-        fun fromId(id: String?): ThemeMode =
-            entries.firstOrNull { it.id == id } ?: SYSTEM
+        /**
+         * Unknown or missing ids fall back to the default. "amoled" is a
+         * leftover from when the true-black look was its own mode: it maps to
+         * [DARK], and [AppSettings] turns the modifier on for it.
+         */
+        fun fromId(id: String?): ThemeMode = when (id) {
+            LIGHT.id -> LIGHT
+            DARK.id, "amoled" -> DARK
+            else -> SYSTEM
+        }
     }
 }
 
@@ -79,7 +85,7 @@ private class Palette(
     val dangerRoseSubtle: Color
 )
 
-/** True black — the shipping look. Every surface sits within 0x00–0x17. */
+/** True black — opt-in on top of the dark look. Every surface sits within 0x00–0x17. */
 private val AmoledPalette = Palette(
     isLight = false,
     pureBlack = Color(0xFF000000),
@@ -168,13 +174,17 @@ private val LightPalette = Palette(
     dangerRoseSubtle = Color(0x1FDC2626)
 )
 
-private fun paletteFor(mode: ThemeMode): Palette = when (mode) {
-    // SYSTEM reads the device flag as plain state, so a single snapshot read
-    // anywhere in the tree repaints everything when the OS flips dark mode.
-    ThemeMode.SYSTEM -> if (AppSettings.systemDark) DarkPalette else LightPalette
-    ThemeMode.AMOLED -> AmoledPalette
-    ThemeMode.DARK -> DarkPalette
-    ThemeMode.LIGHT -> LightPalette
+/**
+ * The palette in force.
+ *
+ * The true-black variant layers on top of either dark appearance — explicit
+ * Dark, or System while the device is dark — so only the dark branch picks
+ * between [DarkPalette] and [AmoledPalette].
+ */
+private fun activePalette(): Palette = when {
+    !AppSettings.isDarkNow -> LightPalette
+    AppSettings.amoledDark -> AmoledPalette
+    else -> DarkPalette
 }
 
 /**
@@ -189,7 +199,7 @@ private fun paletteFor(mode: ThemeMode): Palette = when (mode) {
  */
 object TrackerColors {
     private val palette: Palette
-        get() = paletteFor(AppSettings.themeMode)
+        get() = activePalette()
 
     val isLight: Boolean get() = palette.isLight
 
