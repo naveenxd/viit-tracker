@@ -1,30 +1,40 @@
 {
-  "latest_version": "1.0.1",
-  "latest_build": 2,
-  "apk_build": 2,
-  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.1/viit-tracker-1.0.1.apk",
+  "latest_version": "1.0.2",
+  "latest_build": 3,
+  "apk_build": 3,
+  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.2/viit-tracker-1.0.2.apk",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.1/viit-tracker-1.0.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.1/viit-tracker-1.0.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.1/viit-tracker-1.0.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.2/viit-tracker-1.0.2-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.2/viit-tracker-1.0.2-armeabi-v7a.apk",
+    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.2/viit-tracker-1.0.2-x86_64.apk"
   },
   "apk_builds": {
-    "arm64-v8a": 2,
-    "armeabi-v7a": 2,
-    "x86_64": 2
+    "arm64-v8a": 3,
+    "armeabi-v7a": 3,
+    "x86_64": 3
   },
   "sha256": {
-    "arm64-v8a": "9f11ea1b9ede4115451f098cf758a1da537e6d95d3d26201f4e1137820452760",
-    "armeabi-v7a": "d836c2eb7d8f031c2f443cae9264ff96fba9dd6fd014369328f6e464994c04b4",
-    "x86_64": "8bcd0e8644133d16b6e17ef2b993a8ceac2ec84372a3b5816cfa3225b4ffd536",
-    "universal": "5d80d1a6c1737e74e90a2fc80163618c3a5c2126c22264e706a854bfab06869a"
+    "arm64-v8a": "42c5c11239de78fc46f58b8886ec20057f1de2662ce66a8670364c748e5fec52",
+    "armeabi-v7a": "5fed8fbdd243241a8511717e7225dee106328492b5d1bdbce6739acbeab2cf8d",
+    "x86_64": "db685baa2946952ebe6cb6e7289dc4cb9a701cc51f201000fbfd4da752313de8",
+    "universal": "f4b83705d6ad385c81ff270a0413f890acaec4ea47b99cd31bcf20835c7b99b1"
   },
   "changelog": [
-    "Fixed \"Couldn't check for updates\" — the manifest is now parsed regardless of the raw CDN's content type",
-    "Moved the update status toast above the floating navigation bar"
+    "Update status toast now keeps one size for checking, up-to-date and failure states",
+    "Nudged the toast slightly higher above the navigation bar",
+    "GitHub release notes now include this changelog plus a full comparison link"
   ],
   "force_update": false,
   "history": [
+    {
+      "version": "1.0.2",
+      "build": 3,
+      "changelog": [
+        "Update status toast now keeps one size for checking, up-to-date and failure states",
+        "Nudged the toast slightly higher above the navigation bar",
+        "GitHub release notes now include this changelog plus a full comparison link"
+      ]
+    },
     {
       "version": "1.0.1",
       "build": 2,
