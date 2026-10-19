@@ -1,11 +1,8 @@
 package com.vignan.tracker
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -215,7 +212,7 @@ fun AttendanceScreen() {
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .background(TrackerColors.PrimaryWhite)
-                        .clickable { showValidationDialog = false }
+                        .pressClickable { showValidationDialog = false }
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -277,7 +274,10 @@ fun AttendanceScreen() {
 
             Crossfade(
                 targetState = screenState,
-                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+                // The three states are a chain (checking → login → dashboard),
+                // not siblings, so this is a plain dissolve rather than a
+                // directional slide: there is no "back" to imply.
+                animationSpec = motionTween(Motion.Slow),
                 label = "mainScreenTransition"
             ) { state ->
                 when (state) {
