@@ -6,7 +6,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -445,7 +444,7 @@ fun ProjectionCard(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(TrackerColors.DangerRoseSubtle)
-                            .clickable { ProjectionMarks.clear() }
+                            .pressClickable { ProjectionMarks.clear() }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
@@ -566,7 +565,7 @@ private fun ProjectionInfoButton(onClick: () -> Unit) {
         modifier = Modifier
             .size(24.dp)
             .clip(CircleShape)
-            .clickable { onClick() },
+            .pressClickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(15.dp)) {
@@ -608,7 +607,7 @@ private fun RangeChip(label: String, selected: Boolean, onClick: () -> Unit) {
                 if (selected) TrackerColors.HairlineBorderLight else Color.Transparent,
                 RoundedCornerShape(6.dp)
             )
-            .clickable { onClick() }
+            .pressClickable { onClick() }
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
