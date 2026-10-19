@@ -1,17 +1,13 @@
 package com.vignan.tracker
 
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -295,14 +291,10 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
                 }
             }
 
-            val excludeInteraction = remember { MutableInteractionSource() }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(
-                        interactionSource = excludeInteraction,
-                        indication = null
-                    ) { toggleExcludeOthers(!excludeOthers) }
+                    .pressClickable(pressedScale = 0.99f) { toggleExcludeOthers(!excludeOthers) }
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -329,11 +321,28 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
         }
 
         // ── Result ───────────────────────────────────────────────────────
-        when {
-            isReportLoading -> ReportSkeleton()
-            error != null -> ReportErrorCard(error ?: "", onRetry = { loadForMode() })
-            report != null && report!!.subjects.isEmpty() -> ReportEmptyCard(requestedRange)
-            report != null -> ReportResultCard(report!!, requestedRange)
+        // Keyed on which state is showing rather than on the report itself, so a
+        // re-query that lands on the same card does not re-animate it.
+        val resultState = when {
+            isReportLoading -> ReportState.LOADING
+            error != null -> ReportState.ERROR
+            report != null && report!!.subjects.isEmpty() -> ReportState.EMPTY
+            report != null -> ReportState.RESULT
+            else -> ReportState.IDLE
+        }
+
+        AnimatedContent(
+            targetState = resultState,
+            transitionSpec = { contentSwap() },
+            label = "reportResult"
+        ) { state ->
+            when (state) {
+                ReportState.LOADING -> ReportSkeleton()
+                ReportState.ERROR -> ReportErrorCard(error ?: "", onRetry = { loadForMode() })
+                ReportState.EMPTY -> ReportEmptyCard(requestedRange)
+                ReportState.RESULT -> ReportResultCard(report!!, requestedRange)
+                ReportState.IDLE -> Spacer(modifier = Modifier.height(0.dp))
+            }
         }
     }
 
@@ -376,7 +385,7 @@ private fun ReportModeSelector(selected: ReportMode, onSelect: (ReportMode) -> U
                     .height(34.dp)
                     .clip(RoundedCornerShape(7.dp))
                     .background(if (isSelected) TrackerColors.PrimaryWhite else Color.Transparent)
-                    .clickable { onSelect(mode) },
+                    .pressClickable { onSelect(mode) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -464,7 +473,7 @@ private fun ReportDatePickerField(
             .clip(RoundedCornerShape(10.dp))
             .background(TrackerColors.SurfaceInput)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(10.dp))
-            .clickable { onClick() }
+            .pressClickable(pressedScale = 0.99f) { onClick() }
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -518,7 +527,7 @@ private fun ReportDropdownField(
 
     val caretRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = motionTween(Motion.Medium),
         label = "reportCaretRotation"
     )
 
@@ -535,10 +544,7 @@ private fun ReportDropdownField(
                     if (expanded) TrackerColors.BorderFocused else TrackerColors.HairlineBorder,
                     RoundedCornerShape(10.dp)
                 )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { expanded = !expanded }
+                .pressClickable(pressedScale = 0.99f) { expanded = !expanded }
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -645,7 +651,7 @@ private fun ReportLoadButton(
             .height(46.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (enabled) TrackerColors.PrimaryWhite else TrackerColors.SurfaceElevated)
-            .clickable(enabled = enabled) { onClick() },
+            .pressClickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -679,7 +685,7 @@ private fun statusLabel(percentage: Double): String = when {
 private fun ReportProgressBar(fraction: Double, color: Color, height: Int = 6) {
     val progress by animateFloatAsState(
         targetValue = fraction.coerceIn(0.0, 1.0).toFloat(),
-        animationSpec = tween(600),
+        animationSpec = motionTween(Motion.Progress),
         label = "reportProgress"
     )
     Box(
@@ -866,6 +872,7 @@ private fun ReportSubjectList(report: AttendanceReportResponse) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .staggeredAppear(index)
                     .padding(horizontal = 14.dp, vertical = 11.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -920,16 +927,13 @@ private fun ReportSubjectList(report: AttendanceReportResponse) {
 
 // ---------------------------------------------------------------- states
 
+/** Which of the five result surfaces the panel is showing. */
+private enum class ReportState { IDLE, LOADING, ERROR, EMPTY, RESULT }
+
 /** Placeholder card while the attendance request is in flight. */
 @Composable
 private fun ReportSkeleton() {
-    val transition = rememberInfiniteTransition(label = "reportSkeleton")
-    val alpha by transition.animateFloat(
-        initialValue = 0.30f,
-        targetValue = 0.70f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "reportSkeletonAlpha"
-    )
+    val alpha = rememberShimmerAlpha()
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(
