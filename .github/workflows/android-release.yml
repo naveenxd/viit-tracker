@@ -57,6 +57,12 @@ jobs:
               echo "storeFile=$GITHUB_WORKSPACE/release.keystore"
             } > androidApp/key.properties
             echo "Release keystore decoded."
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # A debug-signed "release" locks the app's update signature to the
+            # debug key: every future properly-signed build would be rejected
+            # as an update. Fail instead of publishing one.
+            echo "::error::Keystore secrets missing — refusing to publish a debug-signed release."
+            exit 1
           else
             echo "::warning::Keystore secrets not configured — APKs will be debug-signed."
           fi
