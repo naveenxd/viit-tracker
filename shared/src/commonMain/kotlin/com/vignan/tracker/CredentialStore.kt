@@ -38,6 +38,13 @@ interface CredentialStore {
     suspend fun saveRegisterTotalsPinned(enabled: Boolean)
 
     /**
+     * Accessibility preference: whether interface motion runs at all. Null when
+     * never chosen, which reads as "on" — the app's default.
+     */
+    suspend fun getMotionEnabled(): Boolean?
+    suspend fun saveMotionEnabled(enabled: Boolean)
+
+    /**
      * Non-suspending peek at the theme, from a plain unencrypted mirror of the
      * value above. The theme has to be correct on the very first frame, and
      * opening the encrypted store is far too slow for that.
@@ -46,6 +53,9 @@ interface CredentialStore {
 
     /** Non-suspending peek at [getAmoledDark]; same contract as [peekThemeMode]. */
     fun peekAmoledDark(): Boolean?
+
+    /** Non-suspending peek at [getMotionEnabled]; same contract as [peekThemeMode]. */
+    fun peekMotionEnabled(): Boolean?
 }
 
 expect fun getCredentialStore(): CredentialStore

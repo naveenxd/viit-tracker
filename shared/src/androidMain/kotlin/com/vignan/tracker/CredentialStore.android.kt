@@ -156,6 +156,33 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         prefs.edit().putBoolean("register_totals_pinned", enabled).apply()
     }
 
+    override suspend fun getMotionEnabled(): Boolean? {
+        // Mirror-first like the theme: the very first frame decides whether the
+        // app's entrance animations run, so this must be readable pre-composition.
+        peekMotionEnabled()?.let { return it }
+        val prefs = getPrefs() ?: return null
+        return if (prefs.contains("motion_enabled")) {
+            prefs.getBoolean("motion_enabled", true)
+        } else {
+            null
+        }
+    }
+
+    override suspend fun saveMotionEnabled(enabled: Boolean) {
+        contextProvider()?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?.edit()?.putBoolean("motion_enabled", enabled)?.apply()
+
+        val prefs = getPrefs() ?: return
+        prefs.edit().putBoolean("motion_enabled", enabled).apply()
+    }
+
+    override fun peekMotionEnabled(): Boolean? {
+        val prefs = contextProvider()
+            ?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?: return null
+        return if (prefs.contains("motion_enabled")) prefs.getBoolean("motion_enabled", true) else null
+    }
+
     private companion object {
         /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
         const val UI_PREFS = "viit_ui_prefs"

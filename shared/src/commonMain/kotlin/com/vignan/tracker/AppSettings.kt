@@ -37,6 +37,19 @@ object AppSettings {
         private set
 
     /**
+     * Whether interface motion runs.
+     *
+     * True by default, and independent of Android's own animator-duration scale:
+     * that setting is applied by the platform to every Compose animation clock,
+     * so "Remove animations" already freezes the app. This switch is the app's
+     * own kill switch on top — it also covers what the system scale cannot,
+     * namely the choreography (stagger delays) and the press-scale feedback,
+     * both of which would otherwise still run at their full duration.
+     */
+    var motionEnabled by mutableStateOf(true)
+        private set
+
+    /**
      * The dark/light appearance actually showing, once [ThemeMode.SYSTEM] has
      * resolved against [systemDark]. The picker shows the Amoled switch only
      * while this is true — there is nothing to make black otherwise.
@@ -61,6 +74,7 @@ object AppSettings {
     suspend fun load(store: CredentialStore = getCredentialStore()) {
         use24HourClock = store.getUse24HourClock() ?: false
         registerTotalsPinned = store.getRegisterTotalsPinned() ?: false
+        store.getMotionEnabled()?.let { motionEnabled = it }
         // Only overwrite when something was actually saved: primeThemeMode may
         // already have restored the values, and the async read must not undo
         // them on the way up.
@@ -90,6 +104,11 @@ object AppSettings {
         store.saveRegisterTotalsPinned(enabled)
     }
 
+    suspend fun setMotionEnabled(enabled: Boolean, store: CredentialStore = getCredentialStore()) {
+        motionEnabled = enabled
+        store.saveMotionEnabled(enabled)
+    }
+
     /**
      * Restore the saved selection from the unencrypted mirror, synchronously.
      *
@@ -99,6 +118,9 @@ object AppSettings {
      */
     fun primeThemeMode(store: CredentialStore = getCredentialStore()) {
         applyStoredTheme(store.peekThemeMode(), store.peekAmoledDark())
+        // Same reason as the theme: the first composition already decides
+        // whether the app's entrance animations run, so read the mirror now.
+        store.peekMotionEnabled()?.let { motionEnabled = it }
     }
 
     /**
