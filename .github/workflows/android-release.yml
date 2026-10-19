@@ -31,6 +31,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + tags so release notes can find the previous tag and
+          # emit a compare link.
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -103,11 +107,37 @@ jobs:
           name: apk-${{ github.run_number }}
           path: androidApp/build/outputs/apk/release/*.apk
 
+      - name: Compose release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.name }}"
+          TAG="${{ github.ref_name }}"
+          CHANGELOG="changelog/$VERSION.md"
+
+          {
+            if [ -s "$CHANGELOG" ]; then
+              cat "$CHANGELOG"
+            else
+              echo "Release $VERSION"
+            fi
+            echo
+
+            PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+            else
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/commits/${TAG}"
+            fi
+          } > release-notes.md
+
+          cat release-notes.md
+
       - name: Publish GitHub Release with APKs
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: release-notes.md
           files: androidApp/build/outputs/apk/release/*.apk
 
       # The updater's manifest: version.json on main, fetched by the app via

@@ -132,7 +132,7 @@ fun UpdateOverlay(
                 // Clear the floating tab pill (50dp) and its 16dp bottom gap,
                 // plus a little breathing room, so the toast never sits on the
                 // navigation.
-                .padding(bottom = 82.dp),
+                .padding(bottom = 85.dp),
         ) {
             toast?.let { StatusToast(it) }
         }
@@ -155,15 +155,20 @@ fun UpdateOverlay(
 @Composable
 private fun StatusToast(state: ToastState) {
     Surface(
+        // Fixed width: "Checking…", "Up to date" and the failure message all
+        // render at the same size instead of the pill resizing per state.
+        modifier = Modifier.width(240.dp),
         shape = RoundedCornerShape(18.dp),
         color = TrackerColors.SurfaceElevated,
         border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight),
         shadowElevation = 8.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
         ) {
             when (state) {
                 ToastState.Checking -> {
