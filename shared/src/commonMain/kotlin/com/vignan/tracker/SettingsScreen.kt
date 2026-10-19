@@ -11,8 +11,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -165,6 +163,21 @@ fun SettingsScreen(
                     scope.launch { AppSettings.setUse24HourClock(enabled) }
                 }
             )
+
+            SettingsDivider()
+
+            // The app honours Android's "Remove animations" on its own; this is
+            // an explicit override for people who want the interface still but
+            // the movement gone, without changing a system-wide setting.
+            SettingsToggleRow(
+                label = "Interface motion",
+                detail = if (AppSettings.motionEnabled) "Transitions and press feedback"
+                else "Instant changes, no animation",
+                checked = AppSettings.motionEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { AppSettings.setMotionEnabled(enabled) }
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -207,7 +220,7 @@ fun SettingsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showSignOutConfirm = true }
+                    .pressClickable(pressedScale = 0.99f) { showSignOutConfirm = true }
                     .padding(horizontal = 16.dp, vertical = 15.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -266,10 +279,7 @@ private fun ThemeField(
                 .background(
                     if (expanded) TrackerColors.SurfaceElevated else Color.Transparent
                 )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { expanded = !expanded }
+                .pressClickable(pressedScale = 0.99f) { expanded = !expanded }
                 .padding(start = 16.dp, end = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
