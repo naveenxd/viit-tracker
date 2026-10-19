@@ -1,5 +1,6 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -341,10 +342,7 @@ fun ProfileScreen(
                             if (isSelected) TrackerColors.HairlineBorderLight else Color.Transparent,
                             RoundedCornerShape(6.dp)
                         )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { activeSection = section }
+                        .pressClickable { activeSection = section }
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -361,25 +359,36 @@ fun ProfileScreen(
         }
 
         // ================= TAB CONTENT =================
-        when (activeSection) {
-            ProfileSection.ACADEMIC_BIO -> {
-                AcademicAndBioSection(
-                    personal = personal,
-                    parents = parents,
-                    education = education,
-                    isLoading = isRefreshing && personal == null
+        AnimatedContent(
+            targetState = activeSection,
+            transitionSpec = {
+                horizontalSwap(
+                    forward = targetState.ordinal > initialState.ordinal,
+                    fraction = 0.05f
                 )
-            }
+            },
+            label = "profileSection"
+        ) { section ->
+            when (section) {
+                ProfileSection.ACADEMIC_BIO -> {
+                    AcademicAndBioSection(
+                        personal = personal,
+                        parents = parents,
+                        education = education,
+                        isLoading = isRefreshing && personal == null
+                    )
+                }
 
-            ProfileSection.FEES_RECORD -> {
-                FeesAndConductSection(
-                    fees = fees,
-                    status = status,
-                    scrapedAt = liveResponse?.scrapedAt,
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    onLogout = onLogout
-                )
+                ProfileSection.FEES_RECORD -> {
+                    FeesAndConductSection(
+                        fees = fees,
+                        status = status,
+                        scrapedAt = liveResponse?.scrapedAt,
+                        isRefreshing = isRefreshing,
+                        onRefresh = onRefresh,
+                        onLogout = onLogout
+                    )
+                }
             }
         }
 
@@ -811,7 +820,7 @@ private fun FeesAndConductSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = !isRefreshing) { onRefresh() }
+                    .pressClickable(enabled = !isRefreshing, pressedScale = 0.99f) { onRefresh() }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -852,7 +861,7 @@ private fun FeesAndConductSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showSignOutConfirm = true }
+                    .pressClickable(pressedScale = 0.99f) { showSignOutConfirm = true }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -896,6 +905,7 @@ internal fun SignOutConfirmDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.86f)
+                .dialogEnter()
                 .clip(RoundedCornerShape(22.dp))
                 .background(TrackerColors.SurfaceElevated)
                 .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(22.dp))
@@ -984,10 +994,7 @@ private fun AlertAction(
     Box(
         modifier = modifier
             .height(50.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick() },
+            .pressClickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(
