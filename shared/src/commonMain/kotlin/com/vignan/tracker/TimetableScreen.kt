@@ -1,16 +1,10 @@
 package com.vignan.tracker
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -304,16 +298,28 @@ fun TimetableScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            val dayItems = weekly[selectedDay].orEmpty()
-            if (dayItems.isEmpty()) {
-                NoClassesCard(isSunday = selectedDay == 0)
-            } else {
-                SlotGrid(
-                    dayItems = dayItems,
-                    isToday = selectedDay == todayIdx,
-                    nowMin = timeInfo.minutesOfDay,
-                    use24Hour = use24Hour
-                )
+            // Every day renders the same seven fixed slots, so the column is the
+            // same height whatever day is picked — which is what makes a slide
+            // safe here: nothing below it moves, and the incoming day can travel
+            // a few percent sideways without the page shifting under the finger.
+            AnimatedContent(
+                targetState = selectedDay,
+                transitionSpec = {
+                    horizontalSwap(forward = targetState > initialState, fraction = 0.05f)
+                },
+                label = "timetableDay"
+            ) { day ->
+                val dayItems = weekly[day].orEmpty()
+                if (dayItems.isEmpty()) {
+                    NoClassesCard(isSunday = day == 0)
+                } else {
+                    SlotGrid(
+                        dayItems = dayItems,
+                        isToday = day == todayIdx,
+                        nowMin = timeInfo.minutesOfDay,
+                        use24Hour = use24Hour
+                    )
+                }
             }
         }
 
@@ -543,15 +549,7 @@ private fun NoClassesCard(isSunday: Boolean) {
 
 @Composable
 private fun PulseDot(color: Color) {
-    val transition = rememberInfiniteTransition()
-    val alpha by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
+    val alpha = rememberShimmerAlpha(initial = 0.35f, target = 1f)
     Box(
         modifier = Modifier
             .size(6.dp)
@@ -757,7 +755,7 @@ private fun DaySelectorTabs(
                             },
                             RoundedCornerShape(10.dp)
                         )
-                        .clickable { onSelect(dayIdx) },
+                        .pressClickable { onSelect(dayIdx) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -817,7 +815,7 @@ private fun FacultyTrigger(count: Int, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceElevated)
             .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .pressClickable(onClick = onClick)
             .semantics { contentDescription = "Faculty and courses, $count allocations" }
             .padding(horizontal = 12.dp, vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -876,6 +874,7 @@ private fun FacultyDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .dialogEnter()
                 .clip(RoundedCornerShape(20.dp))
                 .background(TrackerColors.SurfaceDark)
                 .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(20.dp))
@@ -945,7 +944,10 @@ private fun FacultyDialog(
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
                     itemsIndexed(facultyList) { index, fac ->
-                        FacultyDialogRow(faculty = fac)
+                        FacultyDialogRow(
+                            faculty = fac,
+                            modifier = Modifier.staggeredAppear(index)
+                        )
 
                         if (index != facultyList.lastIndex) {
                             Box(
@@ -978,9 +980,9 @@ private fun FacultyDialog(
 }
 
 @Composable
-private fun FacultyDialogRow(faculty: FacultyAllocation) {
+private fun FacultyDialogRow(faculty: FacultyAllocation, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
