@@ -1,0 +1,47 @@
+{
+  "latest_version": "1.0.0",
+  "latest_build": 1,
+  "apk_build": 1,
+  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.0/viit-tracker-1.0.0.apk",
+  "apk_urls": {
+    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.0/viit-tracker-1.0.0-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.0/viit-tracker-1.0.0-armeabi-v7a.apk",
+    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.0.0/viit-tracker-1.0.0-x86_64.apk"
+  },
+  "apk_builds": {
+    "arm64-v8a": 1,
+    "armeabi-v7a": 1,
+    "x86_64": 1
+  },
+  "sha256": {
+    "arm64-v8a": "ba879546ab1f2b87762bca76e7d12d7f1f9f38e0b32b5b83b3a4441241b41694",
+    "armeabi-v7a": "490fba094c506a0e1129e0d4657b845614e71c68751965acb6c930649f10db30",
+    "x86_64": "e227783a359a268d6ea1bf0935f6a504d5c950c3bbd1d01a17c7b3724821f3a9",
+    "universal": "a6e91474acbd4ae073d99fb26f4170708b7fdffa6fedbdf2a2d8d8b5a34666fc"
+  },
+  "changelog": [
+    "Attendance dashboard with per-subject standings, safe-bunk buffer, and overall percentage",
+    "Day-by-day register: mark holidays and bunks, page through months, and keep totals in view",
+    "Attendance projections with an interactive mark sheet",
+    "Timetable with day-to-day swiping and a home-screen attendance widget",
+    "Faculty profile and academic record view",
+    "Light, dark, and AMOLED themes, plus 24-hour clock and interface motion options",
+    "In-app updates with device-matched APKs and checksum verification"
+  ],
+  "force_update": false,
+  "history": [
+    {
+      "version": "1.0.0",
+      "build": 1,
+      "changelog": [
+        "Attendance dashboard with per-subject standings, safe-bunk buffer, and overall percentage",
+        "Day-by-day register: mark holidays and bunks, page through months, and keep totals in view",
+        "Attendance projections with an interactive mark sheet",
+        "Timetable with day-to-day swiping and a home-screen attendance widget",
+        "Faculty profile and academic record view",
+        "Light, dark, and AMOLED themes, plus 24-hour clock and interface motion options",
+        "In-app updates with device-matched APKs and checksum verification"
+      ]
+    }
+  ]
+}
