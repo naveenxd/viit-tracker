@@ -4,18 +4,17 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
 /**
@@ -117,15 +116,14 @@ internal fun UpdateManifest.resolveFor(abi: String?): UpdateInfo {
 object UpdateChecker {
 
     private val client = HttpClient(OkHttp) {
-        install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true })
-        }
         install(HttpTimeout) {
             connectTimeoutMillis = 10_000
             requestTimeoutMillis = 15_000
             socketTimeoutMillis = 15_000
         }
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * Fetches the update manifest, retrying once on a transient network
@@ -158,8 +156,19 @@ object UpdateChecker {
 
         if (!response.status.isSuccess()) return UpdateResult.CheckFailed
 
+        // GitHub's raw CDN serves JSON as `text/plain`, which Ktor's
+        // ContentNegotiation refuses to deserialize. Read the body as text and
+        // parse it ourselves instead of relying on the Content-Type header.
+        val payload = try {
+            response.bodyAsText()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return UpdateResult.CheckFailed
+        }
+
         val manifest = try {
-            response.body<UpdateManifest>()
+            json.decodeFromString<UpdateManifest>(payload)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

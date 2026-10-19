@@ -129,7 +129,10 @@ fun UpdateOverlay(
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp),
+                // Clear the floating tab pill (50dp) and its 16dp bottom gap,
+                // plus a little breathing room, so the toast never sits on the
+                // navigation.
+                .padding(bottom = 82.dp),
         ) {
             toast?.let { StatusToast(it) }
         }
