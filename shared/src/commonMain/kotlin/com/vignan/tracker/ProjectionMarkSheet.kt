@@ -1,5 +1,6 @@
 package com.vignan.tracker
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -121,7 +122,7 @@ private fun MarkButton(
                 if (marked) accent.copy(alpha = 0.35f) else TrackerColors.HairlineBorder,
                 RoundedCornerShape(8.dp)
             )
-            .clickable { onClick() },
+            .pressClickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -187,6 +188,9 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
 
     var draft by remember(kind) { mutableStateOf(current) }
     var month by remember { mutableStateOf(firstOfMonth(java.util.Calendar.getInstance().timeInMillis)) }
+    // Which way the grid should travel when the month changes: set by the arrows
+    // so the incoming month slides in from the side it was paged towards.
+    var monthForward by remember { mutableStateOf(true) }
 
     val today = remember { java.util.Calendar.getInstance().timeInMillis }
     val thisMonth = remember(today) { firstOfMonth(today) }
@@ -220,8 +224,14 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
             MonthNavigator(
                 monthMillis = month,
                 canGoBack = month > thisMonth,
-                onPrevious = { month = shiftMonth(month, -1) },
-                onNext = { month = shiftMonth(month, 1) }
+                onPrevious = {
+                    monthForward = false
+                    month = shiftMonth(month, -1)
+                },
+                onNext = {
+                    monthForward = true
+                    month = shiftMonth(month, 1)
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -230,15 +240,21 @@ internal fun ProjectionMarkSheet(kind: MarkKind, onDismiss: () -> Unit) {
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            MonthGrid(
-                monthMillis = month,
-                todayMillis = today,
-                selected = draft,
-                accent = accent,
-                onToggle = { key ->
-                    draft = if (key in draft) draft - key else draft + key
-                }
-            )
+            AnimatedContent(
+                targetState = month,
+                transitionSpec = { horizontalSwap(forward = monthForward, fraction = 0.10f) },
+                label = "monthGrid"
+            ) { visibleMonth ->
+                MonthGrid(
+                    monthMillis = visibleMonth,
+                    todayMillis = today,
+                    selected = draft,
+                    accent = accent,
+                    onToggle = { key ->
+                        draft = if (key in draft) draft - key else draft + key
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -339,7 +355,7 @@ private fun MonthArrow(pointsLeft: Boolean, enabled: Boolean, onClick: () -> Uni
                 if (enabled) TrackerColors.HairlineBorderLight else TrackerColors.HairlineBorder,
                 CircleShape
             )
-            .clickable(enabled = enabled) { onClick() },
+            .pressClickable(enabled = enabled) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(14.dp)) {
@@ -501,7 +517,7 @@ private fun ApplyButton(selectedCount: Int, onClick: () -> Unit) {
             .height(46.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (empty) TrackerColors.SurfaceElevated else TrackerColors.PrimaryWhite)
-            .clickable { onClick() },
+            .pressClickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Text(
