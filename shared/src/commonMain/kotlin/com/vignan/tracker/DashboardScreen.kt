@@ -12,13 +12,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,12 +65,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -106,147 +112,158 @@ fun DashboardScreen(
     val hasData = data != null
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (showSettings) {
-            // System back returns to the tab the gear was tapped from.
-            AppBackHandler { showSettings = false }
-            SettingsScreen(
-                onBack = { showSettings = false },
-                onLogout = {
-                    showSettings = false
-                    onLogout()
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-        if (selectedNavTab == MainNavTab.REGISTER) {
-            // REGISTER owns its own lazy scroll: it fills the screen and would
-            // otherwise be nested in this LazyColumn under an unbounded height.
-            // It reserves its own bottom inset for the nav bar, so it takes the
-            // full height here like every other tab.
-            RegisterScreen(
-                onOpenSettings = { showSettings = true },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 86.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            when (selectedNavTab) {
-                MainNavTab.HOME -> {
-                    val statusColor = attendanceStatusColor(hasData, overallPercentage)
+        // System back returns to the tab the gear was tapped from.
+        AppBackHandler(enabled = showSettings) { showSettings = false }
 
-                    item {
-                        // Home's header keeps its identity content (greeting, name,
-                        // roll, branch/semester) but now shares the exact header
-                        // rhythm every other tab uses — plus the settings gear.
-                        ScreenHeader(
-                            eyebrow = timeGreeting(),
-                            title = displayName(data?.studentName.orEmpty()),
-                            titleSuffix = data?.rollNumber
-                                ?.takeIf { it.isNotBlank() }
-                                ?.let { "($it)" },
-                            subtitle = listOfNotNull(
-                                liveResponse?.profile?.branch?.takeIf { it.isNotBlank() },
-                                liveResponse?.profile?.semester?.takeIf { it.isNotBlank() }
-                            ).joinToString("  ·  ").ifBlank { "Attendance overview" },
-                            onSettingsClick = { showSettings = true },
-                            trailing = {
-                                StatusPill(
-                                    hasData = hasData,
-                                    overallPercentage = overallPercentage,
-                                    statusColor = statusColor
-                                )
+        // Each tab keeps its own scroll position. Without this the tabs would
+        // share one LazyListState (the call site is the same), so leaving HOME
+        // scrolled halfway and opening PROFILE would drop you into the middle of
+        // the profile. The holder also restores it across process death.
+        val tabStateHolder = rememberSaveableStateHolder()
+
+        AnimatedContent(
+            targetState = selectedNavTab,
+            transitionSpec = {
+                // Direction follows the tab strip, so moving right feels like
+                // moving right. Same distance for every pair — this is a hint,
+                // not a page-slide.
+                horizontalSwap(forward = targetState.ordinal > initialState.ordinal)
+            },
+            label = "tabContent"
+        ) { tab ->
+            tabStateHolder.SaveableStateProvider(tab.name) {
+                if (tab == MainNavTab.REGISTER) {
+                    // REGISTER owns its own lazy scroll: it fills the screen and
+                    // would otherwise be nested in this LazyColumn under an
+                    // unbounded height. It reserves its own bottom inset for the
+                    // nav bar, so it takes the full height here like every other
+                    // tab.
+                    RegisterScreen(
+                        onOpenSettings = { showSettings = true },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 86.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        when (tab) {
+                            MainNavTab.HOME -> {
+                                val statusColor = attendanceStatusColor(hasData, overallPercentage)
+
+                                item {
+                                    // Home's header keeps its identity content (greeting, name,
+                                    // roll, branch/semester) but now shares the exact header
+                                    // rhythm every other tab uses — plus the settings gear.
+                                    ScreenHeader(
+                                        eyebrow = timeGreeting(),
+                                        title = displayName(data?.studentName.orEmpty()),
+                                        titleSuffix = data?.rollNumber
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?.let { "($it)" },
+                                        subtitle = listOfNotNull(
+                                            liveResponse?.profile?.branch?.takeIf { it.isNotBlank() },
+                                            liveResponse?.profile?.semester?.takeIf { it.isNotBlank() }
+                                        ).joinToString("  ·  ").ifBlank { "Attendance overview" },
+                                        onSettingsClick = { showSettings = true },
+                                        trailing = {
+                                            StatusPill(
+                                                hasData = hasData,
+                                                overallPercentage = overallPercentage,
+                                                statusColor = statusColor
+                                            )
+                                        }
+                                    )
+                                }
+
+                                item {
+                                    HeroAttendanceCard(
+                                        overallPercentage = overallPercentage,
+                                        totalAttended = totalAttended,
+                                        totalConducted = totalConducted,
+                                        hasData = hasData,
+                                        dataVersion = dataVersion
+                                    )
+                                }
+
+                                item {
+                                    // Badge panel defines the height (measured unbounded, so
+                                    // no chip row can ever clip); skips tile matches it.
+                                    StatRow(
+                                        todayContent = {
+                                            TodayPanel(
+                                                liveResponse = liveResponse,
+                                                hasData = hasData,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        },
+                                        skipsContent = {
+                                            SkipsPanel(
+                                                liveResponse = liveResponse,
+                                                hasData = hasData,
+                                                modifier = Modifier.fillMaxHeight()
+                                            )
+                                        }
+                                    )
+                                }
+
+                                item {
+                                    FetchAttendanceButton(
+                                        isLoading = isRefreshing,
+                                        lastFetchDurationMs = lastFetchDurationMs,
+                                        scrapedAt = liveResponse?.scrapedAt,
+                                        hasData = hasData,
+                                        onClick = onFetchClick
+                                    )
+                                }
+
+                                item {
+                                    ProjectionMarkButtons(onOpen = { markSheet = it })
+                                }
+
+                                item {
+                                    ProjectionCard(
+                                        liveResponse = liveResponse,
+                                        hasData = hasData
+                                    )
+                                }
                             }
-                        )
-                    }
 
-                    item {
-                        HeroAttendanceCard(
-                            overallPercentage = overallPercentage,
-                            totalAttended = totalAttended,
-                            totalConducted = totalConducted,
-                            hasData = hasData,
-                            dataVersion = dataVersion
-                        )
-                    }
-
-                    item {
-                        // Badge panel defines the height (measured unbounded, so
-                        // no chip row can ever clip); skips tile matches it.
-                        StatRow(
-                            todayContent = {
-                                TodayPanel(
-                                    liveResponse = liveResponse,
-                                    hasData = hasData,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            },
-                            skipsContent = {
-                                SkipsPanel(
-                                    liveResponse = liveResponse,
-                                    hasData = hasData,
-                                    modifier = Modifier.fillMaxHeight()
-                                )
+                            MainNavTab.ATTENDANCE -> {
+                                item {
+                                    ReportScreen(onOpenSettings = { showSettings = true })
+                                }
                             }
-                        )
-                    }
 
-                    item {
-                        FetchAttendanceButton(
-                            isLoading = isRefreshing,
-                            lastFetchDurationMs = lastFetchDurationMs,
-                            scrapedAt = liveResponse?.scrapedAt,
-                            hasData = hasData,
-                            onClick = onFetchClick
-                        )
-                    }
+                            MainNavTab.REGISTER -> {
+                                // Rendered as a direct child of the Box above, never here.
+                            }
 
-                    item {
-                        ProjectionMarkButtons(onOpen = { markSheet = it })
-                    }
+                            MainNavTab.TIMETABLE -> {
+                                item {
+                                    TimetableScreen(
+                                        liveResponse = liveResponse,
+                                        onOpenSettings = { showSettings = true }
+                                    )
+                                }
+                            }
 
-                    item {
-                        ProjectionCard(
-                            liveResponse = liveResponse,
-                            hasData = hasData
-                        )
-                    }
-                }
-
-                MainNavTab.ATTENDANCE -> {
-                    item {
-                        ReportScreen(onOpenSettings = { showSettings = true })
-                    }
-                }
-
-                MainNavTab.REGISTER -> {
-                    // Rendered as a direct child of the Box above, never here.
-                }
-
-                MainNavTab.TIMETABLE -> {
-                    item {
-                        TimetableScreen(
-                            liveResponse = liveResponse,
-                            onOpenSettings = { showSettings = true }
-                        )
-                    }
-                }
-
-                MainNavTab.PROFILE -> {
-                    item {
-                        ProfileScreen(
-                            liveResponse = liveResponse,
-                            isRefreshing = isRefreshing,
-                            onRefresh = onFetchClick,
-                            onLogout = onLogout,
-                            onOpenSettings = { showSettings = true }
-                        )
+                            MainNavTab.PROFILE -> {
+                                item {
+                                    ProfileScreen(
+                                        liveResponse = liveResponse,
+                                        isRefreshing = isRefreshing,
+                                        onRefresh = onFetchClick,
+                                        onLogout = onLogout,
+                                        onOpenSettings = { showSettings = true }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
         }
 
         // Rendered at the screen root, not inside the lazy list: the sheet is modal
@@ -261,6 +278,37 @@ fun DashboardScreen(
             onTabSelected = { selectedNavTab = it },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Settings is a full-screen surface pushed over the current tab, not a
+        // route: it arrives from the edge the gear sits on and the tab stays
+        // composed underneath, so closing it returns you exactly where you were.
+        // Drawn last so it covers the nav bar while open.
+        AnimatedVisibility(
+            visible = showSettings,
+            enter = slideInHorizontally(motionTween<IntOffset>(Motion.Slow)) { it } +
+                fadeIn(motionTween<Float>(Motion.Base)),
+            exit = slideOutHorizontally(motionTween<IntOffset>(Motion.Medium)) { it } +
+                fadeOut(motionTween<Float>(Motion.Fast))
+        ) {
+            // The page is opaque, but opacity does not stop hit-testing: without
+            // this, a tap on an empty part of Settings would fall through to the
+            // tab card underneath. detectTapGestures swallows those taps in the
+            // main pass, after the page's own controls have had their chance,
+            // and adds no semantics node the way an empty clickable would.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures(onTap = {}) }
+            ) {
+                SettingsScreen(
+                    onBack = { showSettings = false },
+                    onLogout = {
+                        showSettings = false
+                        onLogout()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }
@@ -307,15 +355,15 @@ private fun HeroAttendanceCard(
         AnimatedContent(
             targetState = if (hasData) "data:$dataVersion" else "placeholder",
             transitionSpec = {
-                (fadeIn(animationSpec = tween(420, delayMillis = 90)) +
+                (fadeIn(animationSpec = motionTween(Motion.Medium, delayMillis = Motion.Fast)) +
                         scaleIn(
                             initialScale = 0.94f,
-                            animationSpec = tween(420, delayMillis = 90)
+                            animationSpec = motionTween(Motion.Medium, delayMillis = Motion.Fast)
                         ) +
                         slideInVertically(
-                            animationSpec = tween(420, delayMillis = 90)
+                            animationSpec = motionTween(Motion.Medium, delayMillis = Motion.Fast)
                         ) { it / 4 })
-                    .togetherWith(fadeOut(animationSpec = tween(140)))
+                    .togetherWith(fadeOut(animationSpec = motionTween(Motion.Fast)))
             },
             label = "heroAttendanceReveal"
         ) { state ->
@@ -388,7 +436,7 @@ private fun HeroAttendanceCard(
         // Progress bar — subtle 1px track that fills in with the data
         val progress by animateFloatAsState(
             targetValue = (overallPercentage / 100.0).toFloat().coerceIn(0f, 1f),
-            animationSpec = tween(durationMillis = 700),
+            animationSpec = motionTween(Motion.Progress),
             label = "heroAttendanceProgress"
         )
         Box(
@@ -712,15 +760,11 @@ private fun FetchAttendanceButton(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(TrackerColors.SurfaceDark)
-            .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-            .clickable(enabled = !isLoading) { onClick() }
             .height(46.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-            .clickable(enabled = !isLoading) { onClick() }
+            .pressClickable(enabled = !isLoading) { onClick() }
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -933,6 +977,7 @@ private fun SubjectsListCard(subjects: List<UiSubjectAttendance>) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .staggeredAppear(index)
                     .padding(vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1014,7 +1059,7 @@ fun ExpressiveFloatingPillNavBar(
     // Smooth physics highlight that glides between tabs
     val indicatorOffset by animateDpAsState(
         targetValue = (tabWidth + tabGap) * selectedIndex,
-        animationSpec = spring(dampingRatio = 0.88f, stiffness = 380f),
+        animationSpec = motionSpring(dampingRatio = 0.88f, stiffness = 380f),
         label = "navIndicatorOffset"
     )
 
@@ -1044,22 +1089,24 @@ fun ExpressiveFloatingPillNavBar(
                         val isSelected = tab == selectedTab
                         val contentColor by animateColorAsState(
                             targetValue = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
-                            animationSpec = tween(180),
+                            animationSpec = motionTween(Motion.Base),
                             label = "navTabColor-${tab.name}"
                         )
                         val iconScale by animateFloatAsState(
                             targetValue = if (isSelected) 1f else 0.94f,
-                            animationSpec = spring(dampingRatio = 0.88f, stiffness = 450f),
+                            animationSpec = motionSpring(dampingRatio = 0.88f, stiffness = 450f),
                             label = "navIconScale-${tab.name}"
                         )
+                        val tabInteraction = remember { MutableInteractionSource() }
 
                         Box(
                             modifier = Modifier
                                 .width(tabWidth)
                                 .height(42.dp)
                                 .clip(CircleShape)
+                                .pressFeedback(tabInteraction)
                                 .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
+                                    interactionSource = tabInteraction,
                                     indication = null
                                 ) { onTabSelected(tab) },
                             contentAlignment = Alignment.Center
