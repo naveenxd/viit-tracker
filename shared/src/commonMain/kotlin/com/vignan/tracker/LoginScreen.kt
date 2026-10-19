@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -180,7 +179,7 @@ fun LoginScreen(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .clickable { onRollNumberChange("") }
+                                .pressClickable { onRollNumberChange("") }
                                 .padding(8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -214,7 +213,7 @@ fun LoginScreen(
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .clickable { onTogglePasswordVisibility() }
+                            .pressClickable { onTogglePasswordVisibility() }
                             .padding(8.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -235,14 +234,10 @@ fun LoginScreen(
             )
 
             // Keep Me Logged In
-            val interactionSource = remember { MutableInteractionSource() }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null
-                    ) { onRememberMeChange(!rememberMe) }
+                    .pressClickable(pressedScale = 0.99f) { onRememberMeChange(!rememberMe) }
                     .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
