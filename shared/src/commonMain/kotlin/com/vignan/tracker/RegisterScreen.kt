@@ -1,13 +1,8 @@
 package com.vignan.tracker
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +21,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -148,15 +144,43 @@ fun RegisterScreen(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            when {
-                isLoading && register == null -> RegisterSkeleton()
-                error != null -> RegisterErrorCard(error ?: "", onRetry = { load() })
-                register == null || register!!.datesTracked.isEmpty() -> RegisterEmptyCard()
-                view == RegisterView.PARSED -> RegisterParsedView(register!!)
-                else -> RegisterRawView(register!!)
+            val contentState = when {
+                isLoading && register == null -> RegisterState.LOADING
+                error != null -> RegisterState.ERROR
+                register == null || register!!.datesTracked.isEmpty() -> RegisterState.EMPTY
+                view == RegisterView.PARSED -> RegisterState.PARSED
+                else -> RegisterState.RAW
+            }
+
+            AnimatedContent(
+                targetState = contentState,
+                // PARSED ↔ RAW are the two sibling views of one dataset, so they
+                // slide with the segmented control above them. Loading/error/empty
+                // are states of the same view, so those just dissolve.
+                transitionSpec = {
+                    if (initialState.isView && targetState.isView) {
+                        horizontalSwap(forward = targetState == RegisterState.RAW, fraction = 0.06f)
+                    } else {
+                        contentSwap()
+                    }
+                },
+                label = "registerContent"
+            ) { state ->
+                when (state) {
+                    RegisterState.LOADING -> RegisterSkeleton()
+                    RegisterState.ERROR -> RegisterErrorCard(error ?: "", onRetry = { load() })
+                    RegisterState.EMPTY -> RegisterEmptyCard()
+                    RegisterState.PARSED -> RegisterParsedView(register!!)
+                    RegisterState.RAW -> RegisterRawView(register!!)
+                }
             }
         }
     }
+}
+
+/** Which register surface is showing; see the swap in [RegisterScreen]. */
+private enum class RegisterState(val isView: Boolean) {
+    LOADING(false), ERROR(false), EMPTY(false), PARSED(true), RAW(true)
 }
 
 // ---------------------------------------------------------------- header
@@ -170,7 +194,7 @@ private fun RegisterReloadChip(isLoading: Boolean, onReload: () -> Unit) {
             .clip(RoundedCornerShape(6.dp))
             .background(TrackerColors.SurfaceDark)
             .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(6.dp))
-            .clickable(enabled = !isLoading) { onReload() }
+            .pressClickable(enabled = !isLoading) { onReload() }
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -207,7 +231,7 @@ private fun RegisterViewSelector(selected: RegisterView, onSelect: (RegisterView
                     .height(34.dp)
                     .clip(RoundedCornerShape(7.dp))
                     .background(if (isSelected) TrackerColors.PrimaryWhite else Color.Transparent)
-                    .clickable { onSelect(mode) },
+                    .pressClickable { onSelect(mode) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -248,20 +272,28 @@ private fun RegisterParsedView(register: AttendanceRegisterResponse) {
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(days, key = { it.first }) { (date, entries) ->
-            RegisterDayCard(date = date, entries = entries)
+        itemsIndexed(days, key = { _, day -> day.first }) { index, (date, entries) ->
+            RegisterDayCard(
+                date = date,
+                entries = entries,
+                modifier = Modifier.staggeredAppear(index)
+            )
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RegisterDayCard(date: String, entries: List<DayEntry>) {
+private fun RegisterDayCard(
+    date: String,
+    entries: List<DayEntry>,
+    modifier: Modifier = Modifier
+) {
     val present = entries.count { !it.status.uppercase().contains('A') }
     val absent = entries.size - present
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(TrackerColors.SurfaceDark)
@@ -731,13 +763,7 @@ private fun RawStatusCell(status: String, width: Dp) {
 /** Placeholder shown while the first register request is in flight. Fills the screen. */
 @Composable
 private fun RegisterSkeleton() {
-    val transition = rememberInfiniteTransition(label = "registerSkeleton")
-    val alpha by transition.animateFloat(
-        initialValue = 0.30f,
-        targetValue = 0.70f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "registerSkeletonAlpha"
-    )
+    val alpha = rememberShimmerAlpha()
 
     // Inside a full-height lazy list, so the count just needs to exceed the
     // tallest phone screen — the list clips the tail.
@@ -817,7 +843,7 @@ private fun RegisterErrorCard(message: String, onRetry: () -> Unit) {
                 .height(46.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(TrackerColors.PrimaryWhite)
-                .clickable { onRetry() },
+                .pressClickable { onRetry() },
             contentAlignment = Alignment.Center
         ) {
             Text(
