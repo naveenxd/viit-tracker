@@ -208,7 +208,10 @@ fun SettingsScreen(
 
         // ---------------------------------------------------------- about
         SettingsSection(title = "ABOUT") {
-            SettingsInfoRow(label = "App version", value = version)
+            SettingsInfoRow(
+                label = "App version",
+                value = "$version · ${AppDistribution.label}"
+            )
             SettingsDivider()
             SettingsInfoRow(label = "Maintained by", value = "XD")
         }
