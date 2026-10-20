@@ -42,10 +42,17 @@ class MainActivity : ComponentActivity() {
 
         requestToastPermissionIfNeeded()
 
+        // Display-only channel label for Settings. Update behavior is chosen
+        // at compile time by the github/play flavor, not by this string.
+        AppDistribution.label = when (BuildConfig.DISTRIBUTION) {
+            "play" -> "Play Store"
+            else -> "APK"
+        }
+
         setContent {
             TrackerTheme {
-                // In-app updater: checks for updates on every open, shows the
-                // bottom status pill and the update popup when relevant.
+                // Flavor-specific updater: GitHub APK uses the in-app manifest
+                // flow; Play Store uses Google Play's update flow.
                 UpdateOverlay { App() }
             }
         }

@@ -69,6 +69,24 @@ android {
         versionCode = ciVersionCode ?: 1
         versionName = ciVersionName ?: "1.0"
     }
+
+    // Compile-time distribution split:
+    //   github -> sideloaded APK, in-app updater reads version.json
+    //   play   -> Play Store AAB, Play owns updates
+    // The two flavors contain different updater code and different manifest
+    // permissions, so a Play build can never fall back to self-updating.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("github") {
+            dimension = "distribution"
+            buildConfigField("String", "DISTRIBUTION", "\"github\"")
+        }
+        create("play") {
+            dimension = "distribution"
+            buildConfigField("String", "DISTRIBUTION", "\"play\"")
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -109,8 +127,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    // Per-ABI splits + universal APK, enabled only by CI release builds so local
-    // dev builds stay single-APK (ENABLE_ABI_SPLITS=true ./gradlew assembleRelease).
+    // Per-ABI splits + universal APK, enabled only by CI's GitHub APK build so
+    // local dev builds stay single-APK
+    // (ENABLE_ABI_SPLITS=true ./gradlew assembleGithubRelease).
     if (System.getenv("ENABLE_ABI_SPLITS") == "true") {
         splits {
             abi {
@@ -123,5 +142,17 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+}
+
+dependencies {
+    // Play-distributed builds use Google Play's update mechanism instead of
+    // downloading and installing APKs themselves. Declared after the android
+    // block because product-flavor configurations don't exist until then.
+    "playImplementation"("com.google.android.play:app-update:2.1.0")
+
+    // app-update pulls play-services-basement, which drags in fragment 1.0.0.
+    // Lint requires >=1.3.0 for ComponentActivity's ActivityResult APIs.
+    "playImplementation"("androidx.fragment:fragment:1.8.5")
 }
