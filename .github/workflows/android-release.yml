@@ -1,18 +1,21 @@
-name: Build & release APKs
+name: Build & release APKs / Play AAB
 
 # How to trigger:
 #   - push a version tag:   git tag v1.1.0 && git push origin v1.1.0
-#     -> builds universal + per-ABI release APKs, publishes them on a GitHub
-#        Release for that tag, then updates version.json on main — the app's
-#        in-app updater reads that manifest via raw.githubusercontent.com
+#     -> github job: builds universal + per-ABI release APKs, publishes them
+#        on a GitHub Release, then updates version.json on main — the sideload
+#        app's in-app updater reads that manifest via raw.githubusercontent.com
 #        (CDN, no api rate limits; see tool/release/generate_version_json.py).
+#     -> play job: builds a Play AAB artifact (no GitHub updater, no
+#        REQUEST_INSTALL_PACKAGES) for manual upload to Play Console.
 #   - or run it manually from the Actions tab (workflow_dispatch) — uploads
-#     the APKs as workflow artifacts instead of creating a release.
+#     the APKs/AAB as workflow artifacts instead of creating a release.
 #
-# Release signing (optional): add repository secrets
+# Release signing: add repository secrets
 #   KEYSTORE_BAS64   (base64 of your .jks:  base64 -w0 path/to/release.jks)
 #   KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
-# Without them the workflow still builds, debug-signed (fine for testing only).
+# Manual runs without them build debug-signed artifacts (testing only). Tag
+# runs fail on purpose rather than publishing an unupdatable release.
 #
 # Optional: changelog/<version>.md — bullets shown in the in-app update sheet
 # (falls back to "Release <version>" when missing).
@@ -85,18 +88,18 @@ jobs:
           VERSION_NAME: ${{ steps.ver.outputs.name }}
           VERSION_CODE: ${{ github.run_number }}
           ENABLE_ABI_SPLITS: "true"
-        run: ./gradlew :androidApp:assembleRelease
+        run: ./gradlew :androidApp:assembleGithubRelease
 
       - name: Rename APKs to release naming
         id: naming
         run: |
           set -euo pipefail
           VERSION="${{ steps.ver.outputs.name }}"
-          OUT=androidApp/build/outputs/apk/release
-          mv "$OUT/androidApp-universal-release.apk" "$OUT/viit-tracker-$VERSION.apk"
+          OUT=androidApp/build/outputs/apk/github/release
+          mv "$OUT/androidApp-github-universal-release.apk" "$OUT/viit-tracker-$VERSION.apk"
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            if [ -f "$OUT/androidApp-$abi-release.apk" ]; then
-              mv "$OUT/androidApp-$abi-release.apk" "$OUT/viit-tracker-$VERSION-$abi.apk"
+            if [ -f "$OUT/androidApp-github-$abi-release.apk" ]; then
+              mv "$OUT/androidApp-github-$abi-release.apk" "$OUT/viit-tracker-$VERSION-$abi.apk"
             fi
           done
           ls -lh "$OUT"/*.apk
@@ -105,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: apk-${{ github.run_number }}
-          path: androidApp/build/outputs/apk/release/*.apk
+          path: androidApp/build/outputs/apk/github/release/*.apk
 
       - name: Compose release notes
         if: startsWith(github.ref, 'refs/tags/v')
@@ -138,7 +141,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: release-notes.md
-          files: androidApp/build/outputs/apk/release/*.apk
+          files: androidApp/build/outputs/apk/github/release/*.apk
 
       # The updater's manifest: version.json on main, fetched by the app via
       # raw.githubusercontent.com. Runs AFTER the asset publish so the APK
@@ -151,7 +154,7 @@ jobs:
           set -euo pipefail
           VERSION="${{ steps.ver.outputs.name }}"
           TAG="${{ github.ref_name }}"
-          OUT=androidApp/build/outputs/apk/release
+          OUT=androidApp/build/outputs/apk/github/release
 
           rm -rf /tmp/tracker-releases
           git clone --depth 1 \
@@ -182,3 +185,81 @@ jobs:
             git commit -m "release $TAG: update version.json"
             git push
           fi
+
+  # Play distribution is a separate compile-time flavor. It deliberately has
+  # no GitHub updater code, no FileProvider and no REQUEST_INSTALL_PACKAGES.
+  # This job only builds/upload the AAB artifact; uploading to Play Console is
+  # manual until a service-account publishing step is added.
+  play-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode upload keystore (if secrets configured)
+        env:
+          KEYSTORE_BAS64: ${{ secrets.KEYSTORE_BAS64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BAS64" ]; then
+            printf '%s' "$KEYSTORE_BAS64" | base64 -d > "$GITHUB_WORKSPACE/release.keystore"
+            {
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyPassword=$KEY_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "storeFile=$GITHUB_WORKSPACE/release.keystore"
+            } > androidApp/key.properties
+            echo "Release keystore decoded."
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::Keystore secrets missing — refusing to build an unsigned Play AAB."
+            exit 1
+          else
+            echo "::warning::Keystore secrets not configured — AAB will be debug-signed."
+          fi
+
+      - name: Determine version name
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=1.0-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Play AAB
+        env:
+          VERSION_NAME: ${{ steps.ver.outputs.name }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew :androidApp:bundlePlayRelease
+
+      - name: Verify Play manifest has no self-update permission
+        run: |
+          set -euo pipefail
+          MANIFEST=$(find androidApp/build/intermediates/bundle_manifest/playRelease \
+            -name AndroidManifest.xml | head -n 1)
+          if [ -z "$MANIFEST" ]; then
+            echo "::error::Play merged manifest not found."
+            exit 1
+          fi
+          if grep -q 'REQUEST_INSTALL_PACKAGES' "$MANIFEST"; then
+            echo "::error::Play build contains REQUEST_INSTALL_PACKAGES."
+            exit 1
+          fi
+          echo "Play manifest is clean: no REQUEST_INSTALL_PACKAGES."
+
+      - name: Upload Play AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab-${{ github.run_number }}
+          path: androidApp/build/outputs/bundle/playRelease/*.aab
