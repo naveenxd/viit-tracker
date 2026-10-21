@@ -10,7 +10,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import com.vignan.tracker.analytics.AnalyticsPinger
 import com.vignan.tracker.update.UpdateOverlay
+import com.vignan.tracker.update.WhatsNewOverlay
 
 class MainActivity : ComponentActivity() {
 
@@ -49,11 +51,18 @@ class MainActivity : ComponentActivity() {
             else -> "APK"
         }
 
+        // Fire-and-forget; debug builds and builds without a key are no-ops.
+        AnalyticsPinger.pingIfDue(applicationContext)
+
         setContent {
             TrackerTheme {
-                // Flavor-specific updater: GitHub APK uses the in-app manifest
-                // flow; Play Store uses Google Play's update flow.
-                UpdateOverlay { App() }
+                // "What's new" sits above the updater so the post-update sheet
+                // owns the screen on the first launch after an update.
+                WhatsNewOverlay {
+                    // Flavor-specific updater: GitHub APK uses the in-app manifest
+                    // flow; Play Store uses Google Play's update flow.
+                    UpdateOverlay { App() }
+                }
             }
         }
     }

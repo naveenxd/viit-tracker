@@ -65,6 +65,15 @@ Debug builds:
 ./gradlew :androidApp:assemblePlayDebug
 ```
 
+## Privacy
+
+Release builds send a privacy-first install/usage check-in. It contains a
+hashed device ID and basic app/device metadata, never account, attendance,
+location, or contact data. Analytics is enabled only when a build-time key is
+supplied; debug builds never send it.
+
+Details: [PRIVACY.md](PRIVACY.md).
+
 GitHub release APKs:
 
 ```bash
@@ -95,6 +104,9 @@ On a `v*` tag, CI:
 2. Refreshes `version.json` on `main`, so sideloaded apps can update in-app.
 3. Builds the Play AAB as workflow artifact `aab-<run_number>` for upload to
    Play Console.
+
+Release builds also embed `changelog/<version>.md` for the one-time
+"What's new" sheet shown after an update.
 
 Manual workflow runs produce the same artifacts without creating a release.
 

@@ -18,7 +18,11 @@ name: Build & release APKs / Play AAB
 # runs fail on purpose rather than publishing an unupdatable release.
 #
 # Optional: changelog/<version>.md — bullets shown in the in-app update sheet
-# (falls back to "Release <version>" when missing).
+# and the post-update "What's new" sheet (falls back to "Release <version>" when
+# missing).
+#
+# Optional analytics: ANALYTICS_KEY (and optionally ANALYTICS_URL) repository
+# secrets. Without them the app builds normally and the pinger stays disabled.
 
 on:
   push:
@@ -88,6 +92,8 @@ jobs:
           VERSION_NAME: ${{ steps.ver.outputs.name }}
           VERSION_CODE: ${{ github.run_number }}
           ENABLE_ABI_SPLITS: "true"
+          ANALYTICS_URL: ${{ secrets.ANALYTICS_URL }}
+          ANALYTICS_KEY: ${{ secrets.ANALYTICS_KEY }}
         run: ./gradlew :androidApp:assembleGithubRelease
 
       - name: Rename APKs to release naming
@@ -241,6 +247,8 @@ jobs:
         env:
           VERSION_NAME: ${{ steps.ver.outputs.name }}
           VERSION_CODE: ${{ github.run_number }}
+          ANALYTICS_URL: ${{ secrets.ANALYTICS_URL }}
+          ANALYTICS_KEY: ${{ secrets.ANALYTICS_KEY }}
         run: ./gradlew :androidApp:bundlePlayRelease
 
       - name: Verify Play manifest has no self-update permission

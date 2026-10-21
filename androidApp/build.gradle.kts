@@ -19,6 +19,39 @@ val keystoreProperties = Properties().apply {
 // local/dev builds fall back to the checked defaults.
 val ciVersionCode = System.getenv("VERSION_CODE")?.trim()?.toIntOrNull()
 val ciVersionName = System.getenv("VERSION_NAME")?.trim()?.takeIf { it.isNotEmpty() }
+val appVersionName = ciVersionName ?: "1.0"
+
+// Analytics config is injected locally/CI, not committed. Missing values simply
+// disable the pinger, so forks and debug builds never hit the production Worker.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun configValue(envName: String, propertyName: String): String =
+    System.getenv(envName)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: localProperties.getProperty(propertyName)?.trim().orEmpty()
+
+val analyticsUrl = configValue("ANALYTICS_URL", "analytics.url")
+    .ifEmpty { "https://viit-analytics.nxd2k26.workers.dev" }
+val analyticsKey = configValue("ANALYTICS_KEY", "analytics.key")
+
+// The release changelog for this version, embedded so "What's new" works
+// offline and never depends on version.json being reachable.
+val changelogText = rootProject.file("changelog/$appVersionName.md")
+    .takeIf { it.exists() }
+    ?.readLines()
+    ?.map { it.trim().removePrefix("* ").removePrefix("- ").trim() }
+    ?.filter { it.isNotEmpty() && !it.startsWith("#") }
+    ?.joinToString("\n")
+    .orEmpty()
+
+fun String.asBuildConfigLiteral(): String = "\"" +
+    replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\r", "")
+        .replace("\n", "\\n") +
+    "\""
 
 kotlin {
     compilerOptions {
@@ -67,7 +100,11 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = ciVersionCode ?: 1
-        versionName = ciVersionName ?: "1.0"
+        versionName = appVersionName
+
+        buildConfigField("String", "ANALYTICS_URL", analyticsUrl.asBuildConfigLiteral())
+        buildConfigField("String", "ANALYTICS_KEY", analyticsKey.asBuildConfigLiteral())
+        buildConfigField("String", "CHANGELOG", changelogText.asBuildConfigLiteral())
     }
 
     // Compile-time distribution split:
