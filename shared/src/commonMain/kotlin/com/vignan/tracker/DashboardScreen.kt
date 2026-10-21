@@ -142,6 +142,17 @@ fun DashboardScreen(
                         onOpenSettings = { showSettings = true },
                         modifier = Modifier.fillMaxSize()
                     )
+                } else if (tab == MainNavTab.PROFILE) {
+                    // Profile owns its own scroll so its section selector can
+                    // stay pinned while the long record list moves underneath.
+                    ProfileScreen(
+                        liveResponse = liveResponse,
+                        isRefreshing = isRefreshing,
+                        onRefresh = onFetchClick,
+                        onLogout = onLogout,
+                        onOpenSettings = { showSettings = true },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -250,15 +261,7 @@ fun DashboardScreen(
                             }
 
                             MainNavTab.PROFILE -> {
-                                item {
-                                    ProfileScreen(
-                                        liveResponse = liveResponse,
-                                        isRefreshing = isRefreshing,
-                                        onRefresh = onFetchClick,
-                                        onLogout = onLogout,
-                                        onOpenSettings = { showSettings = true }
-                                    )
-                                }
+                                // Rendered as a direct child of the Box above, never here.
                             }
                         }
                     }

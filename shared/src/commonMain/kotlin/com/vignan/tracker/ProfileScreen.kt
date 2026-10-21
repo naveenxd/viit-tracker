@@ -4,9 +4,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,13 +13,16 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +42,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -54,10 +58,11 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 enum class ProfileSection(val label: String) {
-    ACADEMIC_BIO("ACADEMIC & BIO"),
-    FEES_RECORD("FEES & RECORD")
+    ACADEMIC_BIO("ABOUT"),
+    FEES_RECORD("RECORDS")
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProfileScreen(
     liveResponse: LiveAttendanceResponse?,
@@ -88,6 +93,7 @@ fun ProfileScreen(
     } ?: emptyList()
     val fees = profile?.fees
     val status = profile?.status
+    val performance = profile?.performance
 
     // Trigger an auto-refresh if the user navigates here with only stale/partial cached data
     LaunchedEffect(personal) {
@@ -118,37 +124,41 @@ fun ProfileScreen(
         }
     }
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 86.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        ScreenHeader(
-            eyebrow = "PROFILE",
-            title = "Student account",
-            // The card below owns the identity (name, roll, branch); the header
-            // carries the one thing it can't — how fresh this snapshot is.
-            subtitle = liveResponse?.scrapedAt
-                ?.takeIf { it.isNotBlank() }
-                ?.let { "Last sync  ${formatFetchedAt(it)}" }
-                ?: "Awaiting first sync",
-            onSettingsClick = onOpenSettings
-        )
+        item {
+            ScreenHeader(
+                eyebrow = "PROFILE",
+                title = "Student profile",
+                // The card below owns the identity (name, roll, branch); the header
+                // carries the one thing it can't — how fresh this snapshot is.
+                subtitle = liveResponse?.scrapedAt
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "Last synced ${formatFetchedAt(it)}" }
+                    ?: "Awaiting first sync",
+                onSettingsClick = onOpenSettings
+            )
+        }
 
-        // ================= HERO: Sleek Student Identity Card =================
-        // Lifted one step off the page surface (SurfaceCard + lighter hairline)
-        // with the key metrics set into their own inset strip, so the card reads
-        // as the page's anchor instead of another flat panel.
-        val attendanceAccent = attendanceStatusColor(hasData = held > 0, overallPercentage = pct)
+        item {
+            // ================= HERO: Sleek Student Identity Card =================
+            // Lifted one step off the page surface (SurfaceCard + lighter hairline)
+            // with the key metrics set into their own inset strip, so the card reads
+            // as the page's anchor instead of another flat panel.
+            val attendanceAccent = attendanceStatusColor(hasData = held > 0, overallPercentage = pct)
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(TrackerColors.SurfaceCard)
-                .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(16.dp))
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(TrackerColors.SurfaceCard)
+                    .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
             // Top Identity Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -292,9 +302,13 @@ fun ProfileScreen(
 
                     MetricDivider()
 
-                    val backlogCount = status?.backlogs?.let {
-                        if (it.contains("no backlogs", ignoreCase = true)) "0" else it
-                    } ?: "0"
+                    val backlogText = performance?.backlogs?.takeIf { it.isNotBlank() }
+                        ?: status?.backlogs
+                    val backlogCount = when {
+                        backlogText.isNullOrBlank() -> "0"
+                        backlogText.contains("no backlogs", ignoreCase = true) -> "0"
+                        else -> backlogText
+                    }
 
                     HeroMetricTile(
                         label = "BACKLOGS",
@@ -306,93 +320,119 @@ fun ProfileScreen(
 
                     MetricDivider()
 
-                    val dueText = fees?.totalDue?.takeIf { it.isNotBlank() } ?: "00.00"
-                    val isDue = dueText != "00.00" && dueText != "0.00" && dueText != "0"
+                    val cgpa = meaningfulValue(performance?.cgpa)
+                    val credits = meaningfulValue(performance?.credits)
 
-                    HeroMetricTile(
-                        label = "FEE DUES",
-                        value = if (isDue) "₹$dueText" else "₹0",
-                        subtext = if (isDue) "Pending" else "Settled",
-                        accentColor = if (isDue) TrackerColors.WarningAmber else TrackerColors.SafeEmerald,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        // ================= SECTION SELECTOR TABS =================
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(TrackerColors.SurfaceDark)
-                .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            ProfileSection.entries.forEach { section ->
-                val isSelected = section == activeSection
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) TrackerColors.SurfaceElevated else Color.Transparent)
-                        .border(
-                            1.dp,
-                            if (isSelected) TrackerColors.HairlineBorderLight else Color.Transparent,
-                            RoundedCornerShape(6.dp)
+                    if (cgpa != null) {
+                        HeroMetricTile(
+                            label = "CGPA",
+                            value = cgpa,
+                            subtext = credits?.let { "$it credits" } ?: "Credits not reported",
+                            accentColor = TrackerColors.PrimaryAccent,
+                            modifier = Modifier.weight(1f)
                         )
-                        .pressClickable { activeSection = section }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
+                    } else {
+                        // When the ERP has no CGPA yet, keep the third slot useful
+                        // instead of printing a dead "NA".
+                        val dueText = fees?.totalDue?.takeIf { it.isNotBlank() } ?: "00.00"
+                        val isDue = isAmountDue(dueText)
+
+                        HeroMetricTile(
+                            label = "FEE DUES",
+                            value = if (isDue) "₹$dueText" else "₹0",
+                            subtext = if (isDue) "Pending" else "Settled",
+                            accentColor = if (isDue) TrackerColors.WarningAmber else TrackerColors.SafeEmerald,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+        }
+
+        stickyHeader {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TrackerColors.PureBlack)
+                    .padding(vertical = 2.dp)
+            ) {
+                // ================= SECTION SELECTOR TABS =================
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TrackerColors.SurfaceDark)
+                        .border(1.dp, TrackerColors.HairlineBorder, RoundedCornerShape(8.dp))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = section.label,
-                        color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.SansSerif,
-                        letterSpacing = 0.5.sp
-                    )
+                    ProfileSection.entries.forEach { section ->
+                        val isSelected = section == activeSection
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) TrackerColors.SurfaceElevated else Color.Transparent)
+                                .border(
+                                    1.dp,
+                                    if (isSelected) TrackerColors.HairlineBorderLight else Color.Transparent,
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .pressClickable { activeSection = section }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = section.label,
+                                color = if (isSelected) TrackerColors.PrimaryWhite else TrackerColors.TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.SansSerif,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // ================= TAB CONTENT =================
-        AnimatedContent(
-            targetState = activeSection,
-            transitionSpec = {
-                horizontalSwap(
-                    forward = targetState.ordinal > initialState.ordinal,
-                    fraction = 0.05f
-                )
-            },
-            label = "profileSection"
-        ) { section ->
-            when (section) {
-                ProfileSection.ACADEMIC_BIO -> {
-                    AcademicAndBioSection(
-                        personal = personal,
-                        parents = parents,
-                        education = education,
-                        isLoading = isRefreshing && personal == null
+        item {
+            // ================= TAB CONTENT =================
+            AnimatedContent(
+                targetState = activeSection,
+                transitionSpec = {
+                    horizontalSwap(
+                        forward = targetState.ordinal > initialState.ordinal,
+                        fraction = 0.05f
                     )
-                }
+                },
+                label = "profileSection"
+            ) { section ->
+                when (section) {
+                    ProfileSection.ACADEMIC_BIO -> {
+                        AcademicAndBioSection(
+                            personal = personal,
+                            parents = parents,
+                            performance = performance,
+                            education = education,
+                            isLoading = isRefreshing && personal == null
+                        )
+                    }
 
-                ProfileSection.FEES_RECORD -> {
-                    FeesAndConductSection(
-                        fees = fees,
-                        status = status,
-                        scrapedAt = liveResponse?.scrapedAt,
-                        isRefreshing = isRefreshing,
-                        onRefresh = onRefresh,
-                        onLogout = onLogout
-                    )
+                    ProfileSection.FEES_RECORD -> {
+                        FeesAndConductSection(
+                            fees = fees,
+                            status = status,
+                            scrapedAt = liveResponse?.scrapedAt,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            onLogout = onLogout
+                        )
+                    }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -404,6 +444,7 @@ fun ProfileScreen(
 private fun AcademicAndBioSection(
     personal: PersonalDetails?,
     parents: ParentDetails?,
+    performance: AcademicPerformance?,
     education: List<EducationRecord>,
     isLoading: Boolean
 ) {
@@ -412,184 +453,402 @@ private fun AcademicAndBioSection(
         return
     }
 
+    val cgpa = meaningfulValue(performance?.cgpa)
+    val credits = meaningfulValue(performance?.credits)
+    val achievements = meaningfulNote(performance?.achievements)
+    val paperPresentations = meaningfulNote(performance?.paperPresentations)
+    val hasPerformance = listOf(cgpa, credits, achievements, paperPresentations)
+        .any { it != null }
+
+    val hasEnrollment = listOf(
+        personal?.seatType,
+        personal?.categoryCaste,
+        personal?.entranceType,
+        personal?.rank,
+        personal?.joiningDate,
+        personal?.scholarship,
+        personal?.lastStudied
+    ).any { !it.isNullOrBlank() }
+
+    val correspondence = parents?.correspondenceAddress
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    val permanent = parents?.permanentAddress
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        // --- 1. Academic & Admission Record ---
-        SectionCard(title = "ADMISSION & ENROLLMENT") {
-            RowField("Admission Number", personal?.admissionNo)
-            RowField("University Roll No", personal?.rollNo)
-            RowField("Program / Degree", personal?.course)
-            RowField("Specialization / Branch", personal?.branch)
-            RowField("Current Semester", personal?.semester)
-            RowField("Seat Category", personal?.seatType)
-            RowField("Caste / Reservation", personal?.categoryCaste)
-            RowField("Entrance Exam & Rank", listOfNotNull(personal?.entranceType, personal?.rank?.let { "#$it" }).joinToString(" — ").ifBlank { null })
-            RowField("Date of Admission", personal?.joiningDate)
-            RowField("Scholarship Availed", personal?.scholarship)
+        // The ERP exposes CGPA, credits and achievements separately from the
+        // attendance aggregate. They were previously fetched but never shown.
+        if (hasPerformance) {
+            SectionCard(title = "ACADEMIC PERFORMANCE") {
+                RowField("CGPA", cgpa)
+                RowField("Credits Earned", credits)
+                RowField("Backlogs", cleanStatus(performance?.backlogs, ""))
+                BlockField("Achievements", achievements)
+                BlockField("Paper Presentations", paperPresentations)
+            }
         }
 
-        // --- 2. Personal & Contact Profile ---
+        // Admission number, roll number, programme and semester already live in
+        // the identity card. Repeating them here made the tab read like an ERP
+        // dump and pushed the useful fields below the fold.
+        if (hasEnrollment) {
+            SectionCard(title = "ENROLLMENT DETAILS") {
+                RowField("Seat Category", personal?.seatType)
+                RowField("Caste / Reservation", distinctCsv(personal?.categoryCaste))
+                RowField(
+                    "Entrance Exam & Rank",
+                    listOfNotNull(
+                        personal?.entranceType,
+                        personal?.rank?.let { "#$it" }
+                    ).joinToString("  ·  ").ifBlank { null },
+                    maxLines = 2
+                )
+                RowField("Date of Admission", personal?.joiningDate)
+                RowField("Scholarship Availed", personal?.scholarship)
+                RowField("Last Studied", personal?.lastStudied)
+            }
+        }
+
         SectionCard(title = "PERSONAL DETAILS") {
             RowField("Full Name", personal?.name)
             RowField("Gender", personal?.gender)
             RowField("Date of Birth", personal?.dob)
             RowField("Nationality", personal?.nationality)
             RowField("Religion", personal?.religion)
-            RowField("Primary Mobile", personal?.mobileNo?.takeIf { it.isNotBlank() }?.let { "+91 $it" })
-            if (!personal?.phoneNo.isNullOrBlank()) {
-                RowField("Secondary Phone", personal.phoneNo)
-            }
-            if (!personal?.email.isNullOrBlank()) {
-                RowField("Email Address", personal.email)
-            }
+            RowField("Primary Mobile", phoneWithCountryCode(personal?.mobileNo))
+            RowField("Secondary Phone", phoneWithCountryCode(personal?.phoneNo))
+            RowField("Email Address", personal?.email, maxLines = 2)
             if (!personal?.aadharNo.isNullOrBlank()) {
-                RowField("Aadhaar Number", personal.aadharNo)
+                AadhaarField(personal.aadharNo)
             }
         }
 
-        // --- 3. Parent & Family Details ---
         SectionCard(title = "FAMILY & PARENT DETAILS") {
             RowField("Father's Name", parents?.fatherName)
             RowField("Father's Occupation", parents?.fatherOccupation)
-            RowField("Father's Mobile", parents?.fatherMobile?.takeIf { it.isNotBlank() }?.let { "+91 $it" })
+            RowField("Father's Mobile", phoneWithCountryCode(parents?.fatherMobile))
             RowField("Mother's Name", parents?.motherName)
-            if (!parents?.motherOccupation.isNullOrBlank()) {
-                RowField("Mother's Occupation", parents.motherOccupation)
-            }
-            if (!parents?.motherMobile.isNullOrBlank()) {
-                RowField("Mother's Mobile", "+91 ${parents.motherMobile}")
-            }
-            RowField("Annual Family Income", parents?.annualIncome?.takeIf { it.isNotBlank() }?.let { "₹$it" })
+            RowField("Mother's Occupation", parents?.motherOccupation)
+            RowField("Mother's Mobile", phoneWithCountryCode(parents?.motherMobile))
+            RowField("Annual Family Income", formatRupees(parents?.annualIncome))
         }
 
-        // --- 4. Residential Address ---
-        if (!parents?.correspondenceAddress.isNullOrBlank() || !parents?.permanentAddress.isNullOrBlank()) {
-            val addr = parents.correspondenceAddress.ifBlank { parents.permanentAddress }
-            SectionCard(title = "RESIDENTIAL ADDRESS") {
-                val lines = addr.split("\n", "\r").map { it.trim() }.filter { it.isNotBlank() }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    lines.forEach { line ->
-                        Text(
-                            text = line,
-                            color = TrackerColors.TextPrimary,
-                            fontSize = 13.sp,
-                            fontFamily = FontFamily.SansSerif,
-                            lineHeight = 18.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(TrackerColors.SafeEmerald)
-                    )
-                    Text(
-                        text = "Official correspondence and permanent residence",
-                        color = TrackerColors.TextMuted,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.SansSerif
+        if (correspondence != null || permanent != null) {
+            SectionCard(title = "ADDRESS") {
+                if (correspondence != null) {
+                    AddressBlock(
+                        label = if (permanent == correspondence) {
+                            "Correspondence & permanent"
+                        } else {
+                            "Correspondence"
+                        },
+                        address = correspondence
                     )
                 }
-            }
-        }
 
-        // --- 5. Prior Educational Qualifications ---
-        if (education.isNotEmpty()) {
-            SectionCard(title = "PRIOR EDUCATION QUALIFICATIONS") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    education.forEachIndexed { idx, edu ->
+                if (permanent != null && permanent != correspondence) {
+                    if (correspondence != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(TrackerColors.SurfaceElevated)
-                                .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(10.dp))
-                                .padding(12.dp)
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = edu.qualification,
-                                        color = TrackerColors.TextPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.SansSerif
-                                    )
+                                .height(1.dp)
+                                .background(TrackerColors.HairlineBorder)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                    AddressBlock(label = "Permanent", address = permanent)
+                }
+            }
+        }
 
-                                    if (edu.yearOfPass.isNotBlank()) {
-                                        Text(
-                                            text = "Class of ${edu.yearOfPass}",
-                                            color = TrackerColors.PrimaryAccent,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                }
-
-                                if (edu.institute.isNotBlank()) {
-                                    Text(
-                                        text = edu.institute,
-                                        color = TrackerColors.TextSecondary,
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.SansSerif
-                                    )
-                                }
-
-                                if (edu.board.isNotBlank()) {
-                                    Text(
-                                        text = edu.board,
-                                        color = TrackerColors.TextMuted,
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.SansSerif
-                                    )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (edu.htNo.isNotBlank()) {
-                                        Text(
-                                            text = "HT: ${edu.htNo}",
-                                            color = TrackerColors.TextMuted,
-                                            fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-
-                                    if (edu.obtainedMarks.isNotBlank() && edu.maxMarks.isNotBlank()) {
-                                        val marksObtained = edu.obtainedMarks.toDoubleOrNull()
-                                        val maxMarks = edu.maxMarks.toDoubleOrNull()
-                                        val scorePct = if (marksObtained != null && maxMarks != null && maxMarks > 0) {
-                                            " (${formatPercentage((marksObtained / maxMarks) * 100)})"
-                                        } else ""
-
-                                        Text(
-                                            text = "${edu.obtainedMarks} / ${edu.maxMarks}$scorePct",
-                                            color = TrackerColors.SafeEmerald,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
-                                }
-                            }
-                        }
+        if (education.isNotEmpty()) {
+            SectionCard(title = "PRIOR EDUCATION") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    education.forEach { edu ->
+                        EducationCard(edu)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun EducationCard(edu: EducationRecord) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(TrackerColors.SurfaceElevated)
+            .border(1.dp, TrackerColors.HairlineBorderLight, RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = edu.qualification,
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.SansSerif,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (edu.yearOfPass.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Class of ${edu.yearOfPass}",
+                        color = TrackerColors.PrimaryAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            if (edu.institute.isNotBlank()) {
+                Text(
+                    text = edu.institute,
+                    color = TrackerColors.TextSecondary,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    lineHeight = 17.sp
+                )
+            }
+
+            if (edu.board.isNotBlank()) {
+                Text(
+                    text = edu.board,
+                    color = TrackerColors.TextMuted,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    lineHeight = 15.sp
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                if (edu.htNo.isNotBlank()) {
+                    Text(
+                        text = "HT: ${edu.htNo}",
+                        color = TrackerColors.TextMuted,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 2,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                if (edu.obtainedMarks.isNotBlank() && edu.maxMarks.isNotBlank()) {
+                    val marksObtained = edu.obtainedMarks.toDoubleOrNull()
+                    val maxMarks = edu.maxMarks.toDoubleOrNull()
+                    val scorePct = if (marksObtained != null && maxMarks != null && maxMarks > 0) {
+                        " (${formatPercentage((marksObtained / maxMarks) * 100)})"
+                    } else {
+                        ""
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${edu.obtainedMarks} / ${edu.maxMarks}$scorePct",
+                        color = TrackerColors.SafeEmerald,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.End
+                    )
+                }
+            }
+
+            val grade = listOfNotNull(
+                edu.gradeLetter.takeIf { it.isNotBlank() }?.let { "Grade $it" },
+                edu.gradePoints.takeIf { it.isNotBlank() }?.let { "$it grade points" }
+            ).joinToString("  ·  ")
+
+            if (grade.isNotBlank()) {
+                Text(
+                    text = grade,
+                    color = TrackerColors.TextMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddressBlock(label: String, address: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label.uppercase(),
+            color = TrackerColors.TextSubtle,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.SansSerif,
+            letterSpacing = 0.6.sp
+        )
+
+        Text(
+            text = address,
+            color = TrackerColors.TextPrimary,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.SansSerif,
+            lineHeight = 19.sp
+        )
+    }
+}
+
+@Composable
+private fun BlockField(label: String, value: String?) {
+    val displayValue = value?.takeIf { it.isNotBlank() } ?: return
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            color = TrackerColors.TextSecondary,
+            fontSize = 12.sp,
+            fontFamily = FontFamily.SansSerif,
+            lineHeight = 18.sp
+        )
+        Text(
+            text = displayValue,
+            color = TrackerColors.TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.SansSerif,
+            lineHeight = 19.sp
+        )
+    }
+}
+
+@Composable
+private fun AadhaarField(value: String) {
+    var revealed by remember { mutableStateOf(false) }
+    val digits = value.filter { it.isDigit() }
+
+    val displayValue = when {
+        revealed && digits.length == 12 ->
+            "${digits.take(4)} ${digits.substring(4, 8)} ${digits.takeLast(4)}"
+        revealed -> value
+        digits.length >= 4 -> "•••• •••• ${digits.takeLast(4)}"
+        else -> "•••• •••• ••••"
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Aadhaar Number",
+            color = TrackerColors.TextSecondary,
+            fontSize = 12.sp,
+            fontFamily = FontFamily.SansSerif,
+            lineHeight = 18.sp,
+            modifier = Modifier.weight(0.42f)
+        )
+
+        Row(
+            modifier = Modifier.weight(0.58f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = displayValue,
+                color = TrackerColors.TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.SansSerif,
+                lineHeight = 18.sp,
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { revealed = !revealed }
+                    .semantics {
+                        contentDescription = if (revealed) {
+                            "Hide Aadhaar number"
+                        } else {
+                            "Show Aadhaar number"
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                EyeIcon(
+                    revealed = revealed,
+                    tint = if (revealed) TrackerColors.PrimaryAccent else TrackerColors.TextSecondary
+                )
+            }
+        }
+    }
+}
+
+/** Eye / eye-with-slash glyph for the masked Aadhaar row. */
+@Composable
+private fun EyeIcon(revealed: Boolean, tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(18.dp)) {
+        val stroke = size.width * 0.09f
+        val eye = Path().apply {
+            moveTo(size.width * 0.08f, size.height * 0.50f)
+            cubicTo(
+                size.width * 0.28f,
+                size.height * 0.18f,
+                size.width * 0.72f,
+                size.height * 0.18f,
+                size.width * 0.92f,
+                size.height * 0.50f
+            )
+            cubicTo(
+                size.width * 0.72f,
+                size.height * 0.82f,
+                size.width * 0.28f,
+                size.height * 0.82f,
+                size.width * 0.08f,
+                size.height * 0.50f
+            )
+            close()
+        }
+
+        drawPath(
+            path = eye,
+            color = tint,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        if (revealed) {
+            drawCircle(
+                color = tint,
+                radius = size.width * 0.13f,
+                center = Offset(size.width * 0.5f, size.height * 0.5f)
+            )
+        } else {
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.16f, size.height * 0.84f),
+                end = Offset(size.width * 0.84f, size.height * 0.16f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
         }
     }
 }
@@ -614,7 +873,7 @@ private fun FeesAndConductSection(
         val totalDue = fees?.totalDue?.takeIf { it.isNotBlank() } ?: "00.00"
         val totalPayable = fees?.totalPayable?.takeIf { it.isNotBlank() } ?: "00.00"
         val totalPaid = fees?.totalPaid?.takeIf { it.isNotBlank() } ?: "00.00"
-        val isDue = totalDue != "00.00" && totalDue != "0.00" && totalDue != "0"
+        val isDue = isAmountDue(totalDue)
 
         Box(
             modifier = Modifier
@@ -631,7 +890,7 @@ private fun FeesAndConductSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "TOTAL BALANCE OUTSTANDING",
+                        text = "OUTSTANDING BALANCE",
                         color = TrackerColors.TextMuted,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -667,15 +926,6 @@ private fun FeesAndConductSection(
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.SansSerif
                 )
-
-                if (!fees?.balanceText.isNullOrBlank()) {
-                    Text(
-                        text = "Amount: ${fees.balanceText}",
-                        color = TrackerColors.TextSecondary,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                }
 
                 Box(
                     modifier = Modifier
@@ -728,40 +978,57 @@ private fun FeesAndConductSection(
         // --- 2. Itemized Ledger Breakdown ---
         SectionCard(title = "COLLEGE FEE BREAKDOWN") {
             if (fees != null && fees.items.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    fees.items.forEach { item ->
+                Column {
+                    fees.items.forEachIndexed { index, item ->
+                        if (index > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(TrackerColors.HairlineBorder)
+                            )
+                        }
+
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
                             Row(
                                 modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top
                             ) {
                                 Text(
                                     text = "${item.sNo}.",
                                     color = TrackerColors.TextMuted,
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.width(22.dp)
+                                    modifier = Modifier
+                                        .width(22.dp)
+                                        .padding(top = 1.dp)
                                 )
                                 Text(
                                     text = item.feeName,
                                     color = TrackerColors.TextPrimary,
                                     fontSize = 13.sp,
                                     fontFamily = FontFamily.SansSerif,
-                                    maxLines = 1,
+                                    lineHeight = 17.sp,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
+                            Spacer(modifier = Modifier.width(12.dp))
+
                             Text(
-                                text = "₹${item.feeAmount}",
+                                text = "₹${item.feeAmount.ifBlank { "—" }}",
                                 color = TrackerColors.TextSecondary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.End
                             )
                         }
                     }
@@ -778,10 +1045,10 @@ private fun FeesAndConductSection(
 
         // --- 3. Institutional Record & Discipline ---
         SectionCard(title = "INSTITUTIONAL RECORD & CONDUCT") {
-            val backlogs = status?.backlogs ?: "Student have no backlogs"
-            val outings = status?.outings ?: "No outings"
-            val counseling = status?.counseling ?: "No counseling data !"
-            val disciplinary = status?.disciplinary ?: "No complaints !"
+            val backlogs = cleanStatus(status?.backlogs, "No backlogs")
+            val outings = cleanStatus(status?.outings, "No outings")
+            val counseling = cleanStatus(status?.counseling, "No counseling")
+            val disciplinary = cleanStatus(status?.disciplinary, "No complaints")
 
             StatusRow(
                 label = "Academic Standing",
@@ -1055,11 +1322,11 @@ private fun SectionCard(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = title,
-                color = TrackerColors.TextMuted,
-                fontSize = 10.sp,
+                color = TrackerColors.TextSecondary,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.SansSerif,
-                letterSpacing = 0.8.sp
+                letterSpacing = 0.6.sp
             )
 
             Box(
@@ -1075,64 +1342,137 @@ private fun SectionCard(
 }
 
 @Composable
-private fun RowField(label: String, value: String?) {
+private fun RowField(
+    label: String,
+    value: String?,
+    maxLines: Int = 2
+) {
     val displayValue = value?.takeIf { it.isNotBlank() } ?: return
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
         Text(
             text = label,
             color = TrackerColors.TextSecondary,
             fontSize = 12.sp,
-            fontFamily = FontFamily.SansSerif
+            fontFamily = FontFamily.SansSerif,
+            lineHeight = 18.sp,
+            modifier = Modifier.weight(0.42f)
         )
 
         Text(
             text = displayValue,
             color = TrackerColors.TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
             fontFamily = FontFamily.SansSerif,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            lineHeight = 18.sp,
+            textAlign = TextAlign.Start,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.58f)
         )
     }
+}
+
+private fun phoneWithCountryCode(value: String?): String? {
+    val raw = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return if (raw.startsWith("+")) raw else "+91 $raw"
+}
+
+private fun formatRupees(value: String?): String? {
+    val raw = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (raw.startsWith("₹")) return raw
+
+    val number = raw.replace(",", "").toDoubleOrNull() ?: return "₹$raw"
+    val grouped = number.toLong().toString()
+        .reversed()
+        .chunked(3)
+        .joinToString(",")
+        .reversed()
+    return "₹$grouped"
+}
+
+private fun meaningfulValue(value: String?): String? {
+    val text = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return when (text.lowercase()) {
+        "na", "n/a", "-", "--", "0/0" -> null
+        else -> text
+    }
+}
+
+private fun distinctCsv(value: String?): String? {
+    val text = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return text.split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .joinToString(", ")
+        .ifBlank { null }
+}
+
+private fun meaningfulNote(value: String?): String? {
+    val text = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    val lower = text.lowercase()
+    return when {
+        lower.startsWith("no achievements") -> null
+        lower.startsWith("no paper") -> null
+        else -> text
+    }
+}
+
+private fun isAmountDue(value: String?): Boolean =
+    value?.replace(",", "")?.toDoubleOrNull()?.let { it > 0.0 } ?: false
+
+private fun cleanStatus(value: String?, fallback: String): String {
+    val text = value?.trim()?.takeIf { it.isNotBlank() } ?: return fallback
+    return text
+        .replace("Student have no backlogs", "No backlogs", ignoreCase = true)
+        .replace("No counseling data !", "No counseling", ignoreCase = true)
+        .replace("No complaints !", "No complaints", ignoreCase = true)
 }
 
 @Composable
 private fun StatusRow(label: String, value: String, isClear: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
         Text(
             text = label,
             color = TrackerColors.TextSecondary,
             fontSize = 12.sp,
-            fontFamily = FontFamily.SansSerif
+            fontFamily = FontFamily.SansSerif,
+            lineHeight = 18.sp,
+            modifier = Modifier.weight(0.42f)
         )
 
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.weight(0.58f),
+            verticalAlignment = Alignment.Top
         ) {
             Box(
                 modifier = Modifier
+                    .padding(top = 6.dp)
                     .size(6.dp)
                     .clip(CircleShape)
                     .background(if (isClear) TrackerColors.SafeEmerald else TrackerColors.DangerRose)
             )
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             Text(
                 text = value,
                 color = if (isClear) TrackerColors.TextPrimary else TrackerColors.DangerRose,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                fontFamily = FontFamily.SansSerif
+                fontFamily = FontFamily.SansSerif,
+                lineHeight = 18.sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
         }
     }
