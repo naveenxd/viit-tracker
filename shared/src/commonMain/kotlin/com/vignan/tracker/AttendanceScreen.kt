@@ -102,7 +102,7 @@ fun AttendanceScreen() {
                         attendanceData = liveResp.toAttendanceResponse()
                     },
                     onFailure = { error ->
-                        val friendlyMsg = mapApiErrorToUserMessage(error)
+                        val friendlyMsg = error.toUserMessage()
                         if (attendanceData == null) {
                             // Fallen back to the login screen: the inline banner
                             // carries the message, so don't also fire a snackbar.
@@ -155,7 +155,7 @@ fun AttendanceScreen() {
                     isSessionActive = true
                 },
                 onFailure = { error ->
-                    val friendlyMsg = mapApiErrorToUserMessage(error)
+                    val friendlyMsg = error.toUserMessage()
                     if (attendanceData == null) {
                         // Login screen shows the inline banner; avoid the double
                         // indicator by not also showing a snackbar here.
@@ -345,24 +345,4 @@ private enum class MainScreenState {
     INITIALIZING,
     LOGIN,
     DASHBOARD
-}
-
-private fun mapApiErrorToUserMessage(error: Throwable): String {
-    val cause = (error as? ApiError.Network)?.cause
-    println("ATTENDANCE_ERROR_DEBUG: ${error::class.simpleName}: ${error.message}, cause: ${cause?.message}")
-    cause?.printStackTrace()
-    // Upstream wording that leaks internals ("fmt: no auth token generated")
-    // but really means the portal rejected the credentials.
-    if (error.message.orEmpty().contains("auth token", ignoreCase = true)) {
-        return "Invalid roll number or password."
-    }
-    return when (error) {
-        is ApiError.InvalidCredentials -> "Invalid roll number or password."
-        is ApiError.RateLimited -> "Too many attempts. Try again in ${error.retryAfterSec}s."
-        is ApiError.Network -> "Connection error: ${cause?.message ?: cause?.toString() ?: "Unable to reach server"}"
-        is ApiError.Upstream -> error.message.ifBlank { "Attendance service is unavailable." }
-        is ApiError.BadRequest -> error.message.ifBlank { "Invalid request." }
-        is ApiError.Unknown -> "Error ${error.code}: ${error.body}"
-        else -> error.message?.ifBlank { null } ?: "Attendance service is unavailable."
-    }
 }

@@ -119,7 +119,7 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
             val result = repository.fetchAttendanceReport(fromDate = from, toDate = to, excludeOthers = excludeOthers)
             result.fold(
                 onSuccess = { report = it },
-                onFailure = { error = it.message?.ifBlank { null } ?: "Could not load the attendance." }
+                onFailure = { error = it.toUserMessage() }
             )
             isReportLoading = false
         }

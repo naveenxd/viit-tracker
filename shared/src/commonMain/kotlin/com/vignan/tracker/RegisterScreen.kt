@@ -103,7 +103,7 @@ fun RegisterScreen(
                 onFailure = {
                     // Keep any cached data on screen; only an empty screen shows the error.
                     if (register == null) {
-                        error = it.message?.ifBlank { null } ?: "Could not load the register."
+                        error = it.toUserMessage()
                     }
                 }
             )

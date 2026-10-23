@@ -2,6 +2,8 @@ package com.vignan.tracker
 
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
@@ -13,10 +15,74 @@ sealed class ApiError : Exception() {
     class InvalidCredentials(override val message: String) : ApiError()
     class RateLimited(val retryAfterSec: Int) : ApiError()
     class BadRequest(override val message: String) : ApiError()
+
     class Upstream(override val message: String) : ApiError()
+    class ServiceUnavailable(override val message: String) : ApiError()
+    class Timeout(override val cause: Throwable) : ApiError()
+    class Offline(override val cause: Throwable) : ApiError()
     class Network(override val cause: Throwable) : ApiError()
+
     class Unknown(val code: Int, val body: String) : ApiError()
 }
+
+private val CONNECT_FAILURE_NAMES = setOf(
+    "UnknownHostException",
+    "ConnectException",
+    "NoRouteToHostException",
+    "NetworkUnavailableException",
+)
+
+/** Maps an engine exception to an [ApiError]; socket failures are name-matched to stay JVM-free. */
+internal fun Throwable.toApiError(): ApiError = when (this) {
+    is ApiError -> this
+    is HttpRequestTimeoutException,
+    is ConnectTimeoutException,
+    is SocketTimeoutException -> ApiError.Timeout(this)
+    else -> {
+        val names = generateSequence(this) { it.cause }
+            .take(4)
+            .mapNotNull { it::class.simpleName }
+            .toSet()
+        if (names.any { it in CONNECT_FAILURE_NAMES }) ApiError.Offline(this) else ApiError.Network(this)
+    }
+}
+
+/** The only message the UI shows — never raw engine or upstream text. */
+fun Throwable.toUserMessage(): String {
+    val raw = message.orEmpty().trim()
+
+    // Portal wording that leaks internals but really means the credentials
+    // were rejected ("fmt: no auth token generated").
+    if (raw.contains("auth token", ignoreCase = true)) {
+        return "Invalid roll number or password."
+    }
+
+    return when (this) {
+        is ApiError.InvalidCredentials -> "Invalid roll number or password."
+        is ApiError.RateLimited -> "Too many attempts. Try again in ${retryAfterSec}s."
+        is ApiError.Timeout ->
+            "The server is taking longer than usual. Check your connection and try again."
+        is ApiError.Offline -> "No connection to the server. Check your network and try again."
+        is ApiError.Network -> "Couldn't reach the attendance server. Try again."
+        is ApiError.BadRequest -> raw.takeIf { it.isReadableServerMessage() }
+            ?: "That request didn't go through. Try again."
+        is ApiError.Upstream -> raw.takeIf { it.isReadableServerMessage() }
+            ?: "The attendance service is unavailable right now. Try again shortly."
+        is ApiError.ServiceUnavailable ->
+            "The attendance service is unavailable right now. Try again shortly."
+        is ApiError.Unknown -> "The server returned an unexpected response. Try again shortly."
+        else -> "Something went wrong. Try again."
+    }
+}
+
+private fun String.isReadableServerMessage(): Boolean =
+    isNotBlank() &&
+        length <= 140 &&
+        !startsWith("fmt:") &&
+        !contains("panic") &&
+        !contains("goroutine") &&
+        !contains('<') &&
+        !contains('\n')
 
 class ApiClient(
     private val kvConfigUrl: String = "https://kv.devh.in/kv/01a0be26-998f-7f10-af66-394511241190/API",
@@ -34,8 +100,10 @@ class ApiClient(
             json(AppJson)
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 30_000
-            connectTimeoutMillis = 10_000
+            // The portal scrape often takes >10s on mobile; 10s failed slow-but-working.
+            requestTimeoutMillis = 60_000
+            connectTimeoutMillis = 25_000
+            socketTimeoutMillis = 30_000
         }
     }
 
@@ -51,7 +119,13 @@ class ApiClient(
         }
 
         return try {
-            val response = client.get(kvConfigUrl)
+            val response = client.get(kvConfigUrl) {
+                // Don't let a dead config store add a minute to cold start.
+                timeout {
+                    requestTimeoutMillis = 15_000
+                    connectTimeoutMillis = 10_000
+                }
+            }
             if (response.status.isSuccess()) {
                 val rawText = response.bodyAsText().trim()
                 
@@ -64,7 +138,9 @@ class ApiClient(
                 val extractedUrl = directUrl ?: Regex("""https://[^\s"\\{}]+""").find(rawText)?.value
                 
                 if (extractedUrl.isNullOrBlank()) {
-                    throw ApiError.Upstream("Unable to extract valid API URL from KV response")
+                    throw ApiError.ServiceUnavailable(
+                        "Unable to extract valid API URL from KV response"
+                    )
                 }
 
             val cleanUrl = extractedUrl.trimEnd('/')
@@ -72,12 +148,14 @@ class ApiClient(
             onBaseUrlResolved(cleanUrl)
             cleanUrl
             } else {
-                throw ApiError.Upstream("Failed to resolve API endpoint from remote KV store")
+                throw ApiError.ServiceUnavailable(
+                    "Failed to resolve API endpoint from remote KV store"
+                )
             }
         } catch (e: ApiError) {
             throw e
         } catch (e: Throwable) {
-            throw ApiError.Network(e)
+            throw e.toApiError()
         }
     }
 
@@ -93,7 +171,7 @@ class ApiClient(
         } catch (e: ApiError) {
             throw e
         } catch (e: Throwable) {
-            throw ApiError.Network(e)
+            throw e.toApiError()
         }
     }
 
@@ -114,7 +192,7 @@ class ApiClient(
 
     private inline fun <reified T> decode(body: String): T =
         runCatching { AppJson.decodeFromString<T>(body) }
-            .getOrElse { throw ApiError.Upstream("Malformed response from server") }
+            .getOrElse { throw ApiError.ServiceUnavailable("Malformed response from server") }
 
     /** Full attendance payload — the main call. */
     suspend fun liveAttendance(creds: CredentialsRequest, targetPct: Double = 75.0): LiveAttendanceResponse {
