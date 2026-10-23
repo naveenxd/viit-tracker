@@ -183,6 +183,16 @@ android {
     }
 }
 
+// Debug builds outrank published ones: the updater compares versionCodes, and a
+// local build left at 1 always looked older than the manifest.
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.outputs.forEach { output ->
+            output.versionCode.set(9_000_000 + (ciVersionCode ?: 1))
+        }
+    }
+}
+
 dependencies {
     // Play-distributed builds use Google Play's update mechanism instead of
     // downloading and installing APKs themselves. Declared after the android
