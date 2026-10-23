@@ -2,11 +2,14 @@ package com.vignan.tracker.update
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -69,7 +72,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
-private enum class ToastState { Checking, UpToDate, Failed }
+private enum class ToastState(val label: String) {
+    Checking("Checking for updates…"),
+    UpToDate("Up to date"),
+    Failed("Couldn't check for updates"),
+}
 
 private enum class SheetPhase { Idle, Downloading, Verifying, Ready, Error }
 
@@ -155,9 +162,9 @@ fun UpdateOverlay(
 @Composable
 private fun StatusToast(state: ToastState) {
     Surface(
-        // Fixed width: "Checking…", "Up to date" and the failure message all
-        // render at the same size instead of the pill resizing per state.
-        modifier = Modifier.width(240.dp),
+        modifier = Modifier
+            .width(248.dp)
+            .height(44.dp),
         shape = RoundedCornerShape(18.dp),
         color = TrackerColors.SurfaceElevated,
         border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight),
@@ -165,50 +172,60 @@ private fun StatusToast(state: ToastState) {
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
         ) {
-            when (state) {
-                ToastState.Checking -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(13.dp),
+            // Fixed glyph slot + one label style: states no longer shift sideways.
+            Box(
+                modifier = Modifier.size(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                when (state) {
+                    ToastState.Checking -> CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
                         strokeWidth = 1.8.dp,
                         color = TrackerColors.TextSecondary,
                     )
-                    Text(
-                        text = "Checking for updates…",
-                        fontSize = 12.5.sp,
-                        color = TrackerColors.TextSecondary,
-                    )
-                }
-                ToastState.UpToDate -> {
-                    Text(
+
+                    ToastState.UpToDate -> Text(
                         text = "✓",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Bold,
                         color = TrackerColors.SafeEmerald,
                     )
-                    Text(
-                        text = "Up to date",
-                        fontSize = 12.5.sp,
-                        color = TrackerColors.TextPrimary,
-                    )
-                }
-                ToastState.Failed -> {
-                    Text(
+
+                    ToastState.Failed -> Text(
                         text = "!",
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = TrackerColors.WarningAmber,
                     )
-                    Text(
-                        text = "Couldn't check for updates",
-                        fontSize = 12.5.sp,
-                        color = TrackerColors.TextSecondary,
-                    )
                 }
+            }
+            Spacer(Modifier.width(9.dp))
+            // Fade the label so a state change reads as the same pill updating.
+            AnimatedContent(
+                targetState = state,
+                transitionSpec = {
+                    fadeIn(tween(140)) togetherWith fadeOut(tween(100))
+                },
+                label = "updateToastLabel",
+            ) { current ->
+                Text(
+                    text = current.label,
+                    fontSize = 12.5.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    color = if (current == ToastState.UpToDate) {
+                        TrackerColors.TextPrimary
+                    } else {
+                        TrackerColors.TextSecondary
+                    },
+                )
             }
         }
     }
