@@ -4,9 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -14,6 +15,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,21 +65,25 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vignan.tracker.Motion
 import com.vignan.tracker.TrackerColors
+import com.vignan.tracker.motionTween
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
-private enum class ToastState(val label: String) {
-    Checking("Checking for updates…"),
-    UpToDate("Up to date"),
-    Failed("Couldn't check for updates"),
+private enum class ToastState {
+    Checking,
+    UpToDate,
+    Failed,
 }
 
 private enum class SheetPhase { Idle, Downloading, Verifying, Ready, Error }
@@ -84,13 +92,14 @@ private enum class SheetPhase { Idle, Downloading, Verifying, Ready, Error }
  * Wraps app content with the in-app updater:
  *
  * - runs an update check on **every app open**,
- * - shows a floating toast at the bottom while checking
- *   ("Checking for updates…" → "Up to date" / "Couldn't check for updates",
- *   auto-hides),
+ * - shows a floating status card above the tab bar
+ *   ("Checking for updates" → "You're up to date" / "Couldn't check for
+ *   updates"), with a tap-to-retry action when the check fails,
  * - shows a mirai-style bottom sheet with the release changelog when a newer
  *   release exists — download with live progress, SHA-256 verification, then
  *   hand off to the system installer,
- * - fails softly: a failed check only flashes the toast, never blocks the app.
+ * - fails softly: a failed check only shows the status card, never blocks the
+ *   app.
  */
 @Composable
 fun UpdateOverlay(
@@ -102,10 +111,21 @@ fun UpdateOverlay(
     val localVersion = remember { UpdateChecker.currentVersionName(context) }
 
     var toast by remember { mutableStateOf<ToastState?>(ToastState.Checking) }
+    var statusCardState by remember { mutableStateOf(ToastState.Checking) }
     var available by remember { mutableStateOf<UpdateInfo?>(null) }
+    var checkAttempt by remember { mutableIntStateOf(0) }
+
+    // Keep the last state around so the exit animation has something to draw
+    // after `toast` becomes null.
+    LaunchedEffect(toast) {
+        toast?.let { statusCardState = it }
+    }
 
     // Update check on every open (fresh composition per activity launch).
-    LaunchedEffect(Unit) {
+    // Retrying a failed check bumps [checkAttempt], which cancels the old delay
+    // and starts this effect over.
+    LaunchedEffect(checkAttempt) {
+        toast = ToastState.Checking
         when (val result = UpdateChecker.check(context)) {
             is UpdateResult.Available -> {
                 toast = null
@@ -113,12 +133,14 @@ fun UpdateOverlay(
             }
             UpdateResult.UpToDate -> {
                 toast = ToastState.UpToDate
-                delay(2_400)
+                delay(2_600)
                 toast = null
             }
             UpdateResult.CheckFailed -> {
                 toast = ToastState.Failed
-                delay(2_400)
+                // Long enough to notice the retry affordance, short enough that
+                // it never becomes part of the screen.
+                delay(6_000)
                 toast = null
             }
         }
@@ -130,18 +152,34 @@ fun UpdateOverlay(
         // ---------- bottom status toast ----------
         AnimatedVisibility(
             visible = toast != null,
-            enter = fadeIn() + slideInVertically { it / 2 },
-            exit = fadeOut() + slideOutVertically { it / 2 },
+            enter = fadeIn(motionTween(Motion.Medium)) +
+                slideInVertically(motionTween(Motion.Medium)) { it / 2 } +
+                scaleIn(motionTween(Motion.Medium), initialScale = 0.96f),
+            exit = fadeOut(motionTween(Motion.Fast)) +
+                slideOutVertically(motionTween(Motion.Base)) { it / 3 } +
+                scaleOut(motionTween(Motion.Fast), targetScale = 0.98f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
                 .navigationBarsPadding()
                 // Clear the floating tab pill (50dp) and its 16dp bottom gap,
                 // plus a little breathing room, so the toast never sits on the
                 // navigation.
-                .padding(bottom = 85.dp),
+                .padding(bottom = 86.dp),
         ) {
-            toast?.let { StatusToast(it) }
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                StatusToast(
+                    state = statusCardState,
+                    onRetry = { checkAttempt++ },
+                    modifier = Modifier
+                        .widthIn(max = 400.dp)
+                        .fillMaxWidth(),
+                )
+            }
         }
 
         // ---------- update bottom sheet ----------
@@ -160,75 +198,108 @@ fun UpdateOverlay(
 // ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatusToast(state: ToastState) {
+private fun StatusToast(
+    state: ToastState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = when (state) {
+        ToastState.Checking -> TrackerColors.TextSecondary
+        ToastState.UpToDate -> TrackerColors.SafeEmerald
+        ToastState.Failed -> TrackerColors.WarningAmber
+    }
+    val canRetry = state == ToastState.Failed
+
     Surface(
-        modifier = Modifier
-            .width(248.dp)
-            .height(44.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = TrackerColors.SurfaceElevated,
+        modifier = modifier.then(
+            if (canRetry) Modifier.clickable(onClick = onRetry) else Modifier
+        ),
+        shape = RoundedCornerShape(16.dp),
+        color = TrackerColors.SurfaceCard,
         border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight),
-        shadowElevation = 8.dp,
+        shadowElevation = 10.dp,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Fixed glyph slot + one label style: states no longer shift sideways.
             Box(
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.12f))
+                    .border(1.dp, accent.copy(alpha = 0.32f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 when (state) {
                     ToastState.Checking -> CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
-                        strokeWidth = 1.8.dp,
-                        color = TrackerColors.TextSecondary,
+                        modifier = Modifier.size(12.5.dp),
+                        strokeWidth = 1.6.dp,
+                        color = accent,
                     )
 
                     ToastState.UpToDate -> Text(
                         text = "✓",
-                        fontSize = 12.sp,
-                        lineHeight = 12.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TrackerColors.SafeEmerald,
+                        color = accent,
                     )
 
                     ToastState.Failed -> Text(
                         text = "!",
-                        fontSize = 12.sp,
-                        lineHeight = 12.sp,
+                        fontSize = 14.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TrackerColors.WarningAmber,
+                        color = accent,
                     )
                 }
             }
-            Spacer(Modifier.width(9.dp))
-            // Fade the label so a state change reads as the same pill updating.
+
+            Spacer(Modifier.width(11.dp))
+
+            // The icon stays put while only the copy cross-fades, so a state
+            // change reads as the same card updating rather than a new one.
             AnimatedContent(
                 targetState = state,
+                modifier = Modifier.weight(1f),
                 transitionSpec = {
-                    fadeIn(tween(140)) togetherWith fadeOut(tween(100))
+                    fadeIn(motionTween(Motion.Base, delayMillis = Motion.Fast / 2))
+                        .togetherWith(fadeOut(motionTween(Motion.Fast)))
                 },
-                label = "updateToastLabel",
+                label = "updateToastCopy",
             ) { current ->
                 Text(
-                    text = current.label,
+                    text = current.title(),
                     fontSize = 12.5.sp,
                     lineHeight = 16.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TrackerColors.TextPrimary,
                     maxLines = 1,
-                    color = if (current == ToastState.UpToDate) {
-                        TrackerColors.TextPrimary
-                    } else {
-                        TrackerColors.TextSecondary
-                    },
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (canRetry) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "RETRY",
+                    fontSize = 9.5.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.8.sp,
+                    color = TrackerColors.WarningAmber,
                 )
             }
         }
     }
+}
+
+private fun ToastState.title(): String = when (this) {
+    ToastState.Checking -> "Checking for updates"
+    ToastState.UpToDate -> "You're up to date"
+    ToastState.Failed -> "Couldn't check for updates"
 }
 
 // ─────────────────────────────────────────────────────────────
