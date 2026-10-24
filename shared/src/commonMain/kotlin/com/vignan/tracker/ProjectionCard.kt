@@ -64,10 +64,17 @@ data class ProjectionRow(
     val held: Int,
     val percentage: Double,
     val skippable: Int,        // periods that can still be skipped
-    val isAbsent: Boolean = false // user marked absent in simulation
+    val isAbsent: Boolean = false, // user marked the whole day absent in simulation
+    val bunkedPeriods: Int = 0 // specific periods picked to bunk today
 ) {
     /** Day with nothing scheduled: a Sunday, or a day the user marked as holiday. */
     val isOffDay: Boolean get() = isSunday || isHoliday
+
+    /** Some, but not all, of today's classes are marked as skipped. */
+    val isPartiallyBunked: Boolean get() = !isAbsent && bunkedPeriods > 0
+
+    /** Any bunk mark at all: full day or selected periods. */
+    val isBunked: Boolean get() = isAbsent || isPartiallyBunked
 }
 
 /**
@@ -90,33 +97,92 @@ internal object ProjectionMarks {
     var holidayDates by mutableStateOf(setOf<String>())
         private set
 
-    val isEmpty: Boolean get() = absentDates.isEmpty() && holidayDates.isEmpty()
+    /**
+     * Specific periods picked to bunk today, by period number ([SLOTS]).
+     * Session-scoped like the day marks: these shape the forecast, they are not
+     * portal attendance records. The set is cleared when the date rolls over.
+     */
+    var bunkedPeriodsToday by mutableStateOf(setOf<Int>())
+        private set
+
+    /** Date the period picks belong to, so an overnight session starts clean. */
+    private var periodsDayKey: String? = null
+
+    val isEmpty: Boolean
+        get() = absentDates.isEmpty() && holidayDates.isEmpty() && bunkedPeriodsToday.isEmpty()
 
     fun toggleAbsent(dateKey: String) {
-        absentDates = if (dateKey in absentDates) absentDates - dateKey else absentDates + dateKey
+        val wasMarked = dateKey in absentDates
+        absentDates = if (wasMarked) absentDates - dateKey else absentDates + dateKey
         holidayDates = holidayDates - dateKey
+        // A full-day leave supersedes period picks for that day.
+        if (!wasMarked && dateKey == projectionDateKey(System.currentTimeMillis())) {
+            bunkedPeriodsToday = emptySet()
+        }
     }
 
     fun toggleHoliday(dateKey: String) {
-        holidayDates = if (dateKey in holidayDates) holidayDates - dateKey else holidayDates + dateKey
+        val wasMarked = dateKey in holidayDates
+        holidayDates = if (wasMarked) holidayDates - dateKey else holidayDates + dateKey
         absentDates = absentDates - dateKey
+        if (!wasMarked && dateKey == projectionDateKey(System.currentTimeMillis())) {
+            bunkedPeriodsToday = emptySet()
+        }
     }
 
     /** Replace the bunked dates wholesale, from the calendar's Apply. */
     fun setAbsent(dates: Set<String>) {
         absentDates = dates
         holidayDates = holidayDates - dates
+        if (projectionDateKey(System.currentTimeMillis()) in dates) {
+            bunkedPeriodsToday = emptySet()
+        }
     }
 
     /** Replace the holiday dates wholesale, from the calendar's Apply. */
     fun setHolidays(dates: Set<String>) {
         holidayDates = dates
         absentDates = absentDates - dates
+        if (projectionDateKey(System.currentTimeMillis()) in dates) {
+            bunkedPeriodsToday = emptySet()
+        }
+    }
+
+    /** Toggle one of today's periods. Callers gate this on [TodayPeriodSlot.selectable]. */
+    fun togglePeriodToday(period: Int) {
+        bunkedPeriodsToday = if (period in bunkedPeriodsToday) {
+            bunkedPeriodsToday - period
+        } else {
+            bunkedPeriodsToday + period
+        }
+    }
+
+    /**
+     * Drop picks the portal no longer considers ahead. This is deliberately not
+     * time-based: a period picked while it was ahead stays in the forecast until
+     * a newer snapshot shows it has already been counted.
+     */
+    fun retainPeriodsToday(allowed: Set<Int>) {
+        val kept = bunkedPeriodsToday intersect allowed
+        if (kept != bunkedPeriodsToday) bunkedPeriodsToday = kept
+    }
+
+    /** Reset picks when the calendar day changes, without losing them on rotation. */
+    fun ensurePeriodsDay(dateKey: String) {
+        val known = periodsDayKey
+        when {
+            known == null -> periodsDayKey = dateKey
+            known != dateKey -> {
+                periodsDayKey = dateKey
+                bunkedPeriodsToday = emptySet()
+            }
+        }
     }
 
     fun clear() {
         absentDates = emptySet()
         holidayDates = emptySet()
+        bunkedPeriodsToday = emptySet()
     }
 }
 
@@ -135,67 +201,195 @@ private fun skippablePeriods(attended: Int, held: Int): Int =
 /** Calendar.DAY_OF_WEEK (1=Sun..7=Sat) → weekly-map index (0=Sun..6=Sat). */
 private fun dayMapIndex(cal: java.util.Calendar): Int = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
 
+/**
+ * DEBUG ONLY: treat Sunday as a working day so the period picker can be tested
+ * on a weekend. Sunday uses its own timetable row when the backend has one,
+ * otherwise the first scheduled weekday's periods stand in.
+ *
+ * Set this back to `false` before shipping.
+ */
+internal const val DEBUG_PERIOD_BUNK_ON_SUNDAY = false
+
+/** Today's timetable rows, with the debug-only Sunday fallback above. */
+private fun todayTimetableItems(
+    weekly: Map<Int, List<TTItem>>,
+    cal: java.util.Calendar
+): List<TTItem> {
+    val idx = dayMapIndex(cal)
+    if (idx != 0) return weekly[idx].orEmpty()
+    if (!DEBUG_PERIOD_BUNK_ON_SUNDAY) return emptyList()
+    return weekly[0].orEmpty().ifEmpty {
+        weekly.entries
+            .filter { it.key != 0 }
+            .minByOrNull { it.key }
+            ?.value
+            .orEmpty()
+    }
+}
+
 /** Classes for a weekday from the weekly timetable; Sunday/holiday → 0. */
 private fun scheduledClasses(weekly: Map<Int, List<TTItem>>, mapIdx: Int): Int =
     weekly[mapIdx].orEmpty().sumOf { it.slots.size }
 
-/** "2026-09-22T20:07:57" → minutes-of-day (1207), or null when unusable. */
-private fun parseScrapedMinute(scrapedAt: String?): Int? {
-    if (scrapedAt == null || scrapedAt.length < 16 || scrapedAt.getOrNull(10) != 'T') return null
-    val h = scrapedAt.substring(11, 13).toIntOrNull() ?: return null
-    val m = scrapedAt.substring(14, 16).toIntOrNull() ?: return null
-    if (h !in 0..23 || m !in 0..59) return null
-    return h * 60 + m
-}
-
-/**
- * Today's row counts only classes still ahead: everything with endMin already
- * past at scrape time is assumed attended and is already inside the snapshot.
- * A snapshot scraped on an earlier day cannot tell us which of today's classes
- * are done, so all of today's classes are counted as still ahead.
- */
-private fun classesRemainingToday(items: List<TTItem>, scrapedSameDay: Boolean, scrapeMinute: Int?): Int {
-    val total = items.sumOf { it.slots.size }
-    if (!scrapedSameDay || scrapeMinute == null) return total
-    val elapsed = items.sumOf { if (it.endMin <= scrapeMinute) it.slots.size else 0 }
-    return (total - elapsed).coerceIn(0, total)
-}
-
-/** Calendar time → stable "yyyy-MM-dd" key for comparing scrapes to today (local time). */
+/** Calendar time → stable "yyyy-MM-dd" key for detecting a day rollover. */
 private fun dayKey(time: java.util.Date): String =
     java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(time)
 
+/** One of today's seven period chips. */
+internal data class TodayPeriodSlot(
+    val number: Int,
+    val selectable: Boolean
+)
+
 /**
- * scrapedAt → (local minute-of-day, local "yyyy-MM-dd" it landed on). The
- * backend stamps it in UTC, so it is parsed as UTC and converted to the
- * device's wall clock — matching the timetable's clock times. Falls back to
- * reading the string verbatim (right when the backend sends local time, e.g.
- * with an explicit +05:30 offset) when it cannot be parsed as UTC.
+ * Today's badge rows, matched to the device's current date.
+ *
+ * The portal may also return an undated row; that is the best fallback when the
+ * date format shifts. This mirrors the Today panel's selection so the picker
+ * and the panel always talk about the same day.
  */
-private fun parseScrapedStamp(scrapedAt: String?): Pair<Int, String>? {
-    val raw = scrapedAt?.trim() ?: return null
-    val verbatim = parseScrapedMinute(raw) ?: return null
-    val utcMillis = runCatching {
-        val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-        format.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        format.isLenient = false
-        format.parse(raw.substringBefore('.').trimEnd('Z'))?.time
-    }.getOrNull()
-    if (utcMillis != null) {
-        val local = java.util.Calendar.getInstance().apply { timeInMillis = utcMillis }
-        val localMinute = local.get(java.util.Calendar.HOUR_OF_DAY) * 60 + local.get(java.util.Calendar.MINUTE)
-        return localMinute to dayKey(local.time)
+private fun todayBadgeEntry(
+    live: LiveAttendanceResponse,
+    nowMillis: Long
+): TodayAttendance? {
+    val entries = live.attendance.today
+    if (entries.isEmpty()) return null
+    val parsed = entries.map { it to parseLooseDate(it.date) }
+    return parsed.firstOrNull { isSameCalendarDay(it.second, nowMillis) }?.first
+        ?: parsed.lastOrNull { it.second == null }?.first
+}
+
+/** How many periods a portal badge says were already booked for that subject today. */
+private fun Badge.bookedPeriods(): Int {
+    val counted = presentCount + absentCount
+    if (counted > 0) return counted
+    val normalized = status.trim().uppercase()
+    return normalized.count { it == 'P' || it == 'A' }
+}
+
+/**
+ * Completed periods today, straight from the portal's today badges.
+ *
+ * Deliberately ignores the device clock and timetable: portal writes are often
+ * delayed, and a timetable can be cached or wrong. If the portal says six
+ * periods were already recorded, the seventh is the next one that can be
+ * bunked — regardless of what time it is.
+ */
+internal fun todayBookedPeriods(
+    live: LiveAttendanceResponse,
+    nowMillis: Long = System.currentTimeMillis()
+): Int {
+    val entry = todayBadgeEntry(live, nowMillis) ?: return 0
+    return entry.badges.sumOf { it.bookedPeriods() }.coerceIn(0, SLOTS.size)
+}
+
+/**
+ * Chips for today. Eligibility is portal-driven only: periods after the number
+ * already booked are open, everything before is done. The timetable is not
+ * consulted here.
+ */
+internal fun todayPeriodSlots(
+    live: LiveAttendanceResponse?,
+    nowMillis: Long = System.currentTimeMillis(),
+    blocked: Boolean = false
+): List<TodayPeriodSlot> {
+    if (live == null) {
+        return SLOTS.map { TodayPeriodSlot(number = it.n, selectable = false) }
     }
-    // Unparseable as UTC (e.g. explicit +05:30 offset — already local): read verbatim.
-    return verbatim to raw.take(10)
+    val booked = todayBookedPeriods(live, nowMillis)
+    return SLOTS.map { slot ->
+        TodayPeriodSlot(
+            number = slot.n,
+            selectable = !blocked && slot.n > booked
+        )
+    }
+}
+
+/**
+ * Scheduled slots the projection still has to add for today: timetable slots
+ * after the portal-booked count, plus any period the user explicitly picked
+ * that the timetable does not list. The timetable defines which slots exist;
+ * the portal decides how far down that list is already accounted for.
+ */
+private fun remainingTodaySlots(
+    live: LiveAttendanceResponse,
+    cal: java.util.Calendar,
+    picked: Set<Int> = emptySet()
+): List<Int> {
+    val booked = todayBookedPeriods(live, cal.timeInMillis)
+    val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
+    val scheduled = todayTimetableItems(weekly, cal)
+        .flatMap { it.slots }
+        .filter { it > booked }
+    // Picks are an explicit "this class exists" from the user; honour them even
+    // when the cached timetable is missing the slot.
+    val explicit = picked.filter { it > booked }
+    return (scheduled + explicit).distinct().sorted()
+}
+
+/**
+ * Period numbers still open today: everything after the portal's booked count.
+ * Deliberately timetable-free, matching the chips and the pruning rule.
+ */
+internal fun todayRemainingPeriods(
+    live: LiveAttendanceResponse?,
+    nowMillis: Long = System.currentTimeMillis()
+): Set<Int> {
+    if (live == null) return emptySet()
+    val booked = todayBookedPeriods(live, nowMillis)
+    return SLOTS.map { it.n }.filter { it > booked }.toSet()
+}
+
+/** End-of-today attendance if the picked periods are bunked and the rest attended. */
+internal data class TodayBunkSummary(
+    val remainingPeriods: Int,
+    val bunkedPeriods: Int,
+    val attended: Int,
+    val held: Int,
+    val percentage: Double
+)
+
+/**
+ * The same arithmetic as projection row 0, exposed so the home hero can show
+ * what today's period picks would do to the overall percentage without
+ * duplicating (and eventually drifting from) the forecast.
+ */
+internal fun todayBunkSummary(
+    live: LiveAttendanceResponse,
+    bunkedPeriods: Set<Int>,
+    nowMillis: Long = System.currentTimeMillis(),
+    blocked: Boolean = false
+): TodayBunkSummary? {
+    val agg = live.profile.aggregate
+    if (agg.held <= 0 || blocked) return null
+
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
+    if (cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY &&
+        !DEBUG_PERIOD_BUNK_ON_SUNDAY
+    ) return null
+
+    val remaining = remainingTodaySlots(live, cal, bunkedPeriods)
+    val picked = remaining.count { it in bunkedPeriods }
+    val attended = agg.attended + remaining.size - picked
+    val held = agg.held + remaining.size
+
+    return TodayBunkSummary(
+        remainingPeriods = remaining.size,
+        bunkedPeriods = picked,
+        attended = attended,
+        held = held,
+        percentage = if (held > 0) attended * 100.0 / held else 0.0
+    )
 }
 
 /**
  * Builds the attendance projection list for the given number of days.
- * - Row 0 is TODAY at end-of-day: the scraped snapshot plus the classes still
- *   ahead of the scrape — attended, or missed if today is in [absentDates].
- *   With a snapshot scraped on an earlier day, all of today's classes are
- *   counted as still ahead (the snapshot then covers only up to that scrape).
+ * - Row 0 is TODAY at end-of-day: the portal snapshot plus the timetable slots
+ *   after the periods the portal has already booked (and any explicitly picked
+ *   period the timetable omitted) — attended, or missed if today is in
+ *   [absentDates] or if individual periods are in [bunkedPeriodsToday].
+ *   Completed periods are counted from today's portal badges, not from the
+ *   device clock.
  * - Future days (starting tomorrow) project attendance assuming scheduled classes are attended,
  *   or missed if included in [absentDates].
  * - Sundays, and any day in [holidayDates], are present in sequence but marked as off days:
@@ -207,7 +401,8 @@ fun buildAttendanceProjection(
     live: LiveAttendanceResponse,
     days: Int,
     absentDates: Set<String> = emptySet(),
-    holidayDates: Set<String> = emptySet()
+    holidayDates: Set<String> = emptySet(),
+    bunkedPeriodsToday: Set<Int> = emptySet()
 ): List<ProjectionRow> {
     val agg = live.profile.aggregate
     if (agg.held <= 0) return emptyList()
@@ -222,7 +417,8 @@ fun buildAttendanceProjection(
     val rows = mutableListOf<ProjectionRow>()
 
     // Row 0 — TODAY at end-of-day: snapshot + the classes still ahead of the scrape
-    val isTodaySunday = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
+    val isTodaySunday = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY &&
+        !DEBUG_PERIOD_BUNK_ON_SUNDAY
     val todayDateText = dateFormat.format(java.util.Date(cal.timeInMillis))
     val isTodayHoliday = !isTodaySunday && todayDateText in holidayDates
 
@@ -240,18 +436,21 @@ fun buildAttendanceProjection(
             isAbsent = false
         )
     } else {
-        val scrape = parseScrapedStamp(live.scrapedAt)
-        val scrapedSameDay = scrape != null && scrape.second == dayKey(cal.time)
-        val todayClasses = classesRemainingToday(
-            weekly[dayMapIndex(cal)].orEmpty(), scrapedSameDay, scrape?.first
-        )
+        val remainingSlots = remainingTodaySlots(live, cal, bunkedPeriodsToday)
+        val todayClasses = remainingSlots.size
         val isTodayAbsent = todayDateText in absentDates
+        val todayBunks = if (isTodayAbsent) {
+            0
+        } else {
+            remainingSlots.count { it in bunkedPeriodsToday }
+        }
 
         if (isTodayAbsent) {
             // Absent/Bunked: classes held increases, but attended does not!
             held += todayClasses
         } else {
-            attended += todayClasses
+            // Only the picked periods are missed; the rest are assumed attended.
+            attended += todayClasses - todayBunks
             held += todayClasses
         }
 
@@ -264,7 +463,8 @@ fun buildAttendanceProjection(
             held = held,
             percentage = if (held > 0) attended * 100.0 / held else 0.0,
             skippable = skippablePeriods(attended, held),
-            isAbsent = isTodayAbsent
+            isAbsent = isTodayAbsent,
+            bunkedPeriods = todayBunks
         )
     }
 
@@ -337,6 +537,7 @@ fun ProjectionCard(
     // write straight into what the forecast reads.
     val absentDates = ProjectionMarks.absentDates
     val holidayDates = ProjectionMarks.holidayDates
+    val bunkedPeriodsToday = ProjectionMarks.bunkedPeriodsToday
     // Recompute the projection when the calendar day rolls over, so the "today"
     // row and its remaining classes stay correct without a refetch.
     var dayStamp by remember { mutableStateOf(dayKey(java.util.Calendar.getInstance().time)) }
@@ -351,9 +552,9 @@ fun ProjectionCard(
         }
     }
 
-    val rows = remember(liveResponse, range, absentDates, holidayDates, dayStamp) {
+    val rows = remember(liveResponse, range, absentDates, holidayDates, bunkedPeriodsToday, dayStamp) {
         liveResponse?.let {
-            buildAttendanceProjection(it, range, absentDates, holidayDates)
+            buildAttendanceProjection(it, range, absentDates, holidayDates, bunkedPeriodsToday)
         } ?: emptyList()
     }
 
@@ -418,15 +619,26 @@ fun ProjectionCard(
             ) {
                 Text(
                     text = when {
-                        absentDates.isEmpty() && holidayDates.isEmpty() ->
+                        absentDates.isEmpty() && holidayDates.isEmpty() && bunkedPeriodsToday.isEmpty() ->
                             "Swipe left to bunk, right for holiday"
                         else -> buildString {
-                            append("${absentDates.size} bunked")
-                            append(" · ${holidayDates.size} holiday")
+                            if (bunkedPeriodsToday.isNotEmpty()) {
+                                append("${bunkedPeriodsToday.size} period")
+                                if (bunkedPeriodsToday.size != 1) append("s")
+                                append(" today")
+                            }
+                            if (absentDates.isNotEmpty()) {
+                                if (isNotEmpty()) append(" · ")
+                                append("${absentDates.size} bunked")
+                            }
+                            if (holidayDates.isNotEmpty()) {
+                                if (isNotEmpty()) append(" · ")
+                                append("${holidayDates.size} holiday")
+                            }
                         }
                     },
                     color = when {
-                        absentDates.isNotEmpty() -> TrackerColors.DangerRose
+                        absentDates.isNotEmpty() || bunkedPeriodsToday.isNotEmpty() -> TrackerColors.DangerRose
                         holidayDates.isNotEmpty() -> TrackerColors.WarningAmber
                         else -> TrackerColors.TextSubtle
                     },
@@ -635,13 +847,13 @@ private fun ProjectionLine(
     )
 
     val rowBackground = when {
-        row.isAbsent -> TrackerColors.DangerRoseSubtle
+        row.isBunked -> TrackerColors.DangerRoseSubtle
         isToday -> TrackerColors.SurfaceElevated.copy(alpha = 0.5f)
         else -> Color.Transparent
     }
 
     val rowBorder = when {
-        row.isAbsent -> TrackerColors.DangerRose.copy(alpha = 0.3f)
+        row.isBunked -> TrackerColors.DangerRose.copy(alpha = 0.3f)
         isToday -> TrackerColors.HairlineBorderLight
         else -> Color.Transparent
     }
@@ -768,7 +980,7 @@ private fun ProjectionLine(
                     modifier = Modifier.weight(1.3f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (row.isAbsent) {
+                    if (row.isBunked) {
                         Box(
                             modifier = Modifier
                                 .size(5.dp)
@@ -786,12 +998,12 @@ private fun ProjectionLine(
                         color = when {
                             row.isSunday -> TrackerColors.TextSubtle
                             row.isHoliday -> TrackerColors.TextMuted
-                            row.isAbsent -> TrackerColors.DangerRose
+                            row.isBunked -> TrackerColors.DangerRose
                             isToday -> TrackerColors.TextPrimary
                             else -> TrackerColors.TextSecondary
                         },
                         fontSize = if (row.isOffDay) 10.sp else 11.sp,
-                        fontWeight = if (isToday || row.isAbsent) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = if (isToday || row.isBunked) FontWeight.Bold else FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -816,7 +1028,7 @@ private fun ProjectionLine(
                     color = when {
                         row.isSunday -> TrackerColors.TextSubtle
                         row.isHoliday -> TrackerColors.TextMuted
-                        row.isAbsent -> TrackerColors.DangerRose.copy(alpha = 0.8f)
+                        row.isBunked -> TrackerColors.DangerRose.copy(alpha = 0.8f)
                         else -> TrackerColors.TextMuted
                     },
                     fontSize = if (row.isOffDay) 10.sp else 11.sp,
@@ -849,6 +1061,15 @@ private fun ProjectionLine(
                         row.isAbsent -> {
                             Text(
                                 text = "BUNK",
+                                color = TrackerColors.DangerRose,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        row.isPartiallyBunked -> {
+                            Text(
+                                text = "-${row.bunkedPeriods}",
                                 color = TrackerColors.DangerRose,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,

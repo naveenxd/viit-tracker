@@ -230,6 +230,13 @@ fun DashboardScreen(
                                 }
 
                                 item {
+                                    TodayPeriodBunkCard(
+                                        liveResponse = liveResponse,
+                                        hasData = hasData
+                                    )
+                                }
+
+                                item {
                                     ProjectionMarkButtons(onOpen = { markSheet = it })
                                 }
 
@@ -890,7 +897,7 @@ internal fun formatFetchedAt(scrapedAt: String?): String {
 // ---------------------------------------------------------------- date helpers
 
 /** Best-effort parse of the various date formats the server may send. Returns epoch ms or null. */
-private fun parseLooseDate(raw: String?): Long? {
+internal fun parseLooseDate(raw: String?): Long? {
     if (raw.isNullOrBlank()) return null
     val cleaned = raw.trim().uppercase()
 
@@ -927,7 +934,7 @@ private fun parseLooseDate(raw: String?): Long? {
     return null
 }
 
-private fun isSameCalendarDay(aMs: Long?, bMs: Long): Boolean {
+internal fun isSameCalendarDay(aMs: Long?, bMs: Long): Boolean {
     if (aMs == null) return false
     val a = java.util.Calendar.getInstance().apply { timeInMillis = aMs }
     val b = java.util.Calendar.getInstance().apply { timeInMillis = bMs }

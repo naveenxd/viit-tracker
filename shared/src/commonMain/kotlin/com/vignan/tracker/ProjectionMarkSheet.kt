@@ -587,6 +587,10 @@ internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
                 title = "Mark leaves · mark holidays",
                 body = "Pick dates in a calendar. Leaves bunk them, holidays close them."
             )
+            HelpRow(
+                title = "Select period · today",
+                body = "Pick any period the portal has not booked yet. The forecast updates immediately."
+            )
         }
     }
 }
