@@ -6,8 +6,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -15,7 +13,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,7 +62,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -152,15 +148,12 @@ fun UpdateOverlay(
         // ---------- bottom status toast ----------
         AnimatedVisibility(
             visible = toast != null,
-            enter = fadeIn(motionTween(Motion.Medium)) +
-                slideInVertically(motionTween(Motion.Medium)) { it / 2 } +
-                scaleIn(motionTween(Motion.Medium), initialScale = 0.96f),
+            enter = fadeIn(motionTween(Motion.Base)) +
+                slideInVertically(motionTween(Motion.Base)) { it / 3 },
             exit = fadeOut(motionTween(Motion.Fast)) +
-                slideOutVertically(motionTween(Motion.Base)) { it / 3 } +
-                scaleOut(motionTween(Motion.Fast), targetScale = 0.98f),
+                slideOutVertically(motionTween(Motion.Fast)) { it / 4 },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
                 .padding(horizontal = 18.dp)
                 .navigationBarsPadding()
                 // Clear the floating tab pill (50dp) and its 16dp bottom gap,
@@ -168,18 +161,11 @@ fun UpdateOverlay(
                 // navigation.
                 .padding(bottom = 86.dp),
         ) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                StatusToast(
-                    state = statusCardState,
-                    onRetry = { checkAttempt++ },
-                    modifier = Modifier
-                        .widthIn(max = 400.dp)
-                        .fillMaxWidth(),
-                )
-            }
+            StatusToast(
+                state = statusCardState,
+                onRetry = { checkAttempt++ },
+                modifier = Modifier.widthIn(max = 320.dp),
+            )
         }
 
         // ---------- update bottom sheet ----------
@@ -214,55 +200,34 @@ private fun StatusToast(
         modifier = modifier.then(
             if (canRetry) Modifier.clickable(onClick = onRetry) else Modifier
         ),
-        shape = RoundedCornerShape(16.dp),
-        color = TrackerColors.SurfaceCard,
-        border = BorderStroke(1.dp, TrackerColors.HairlineBorderLight),
-        shadowElevation = 10.dp,
+        shape = RoundedCornerShape(50),
+        color = TrackerColors.SurfaceElevated,
+        border = BorderStroke(1.dp, TrackerColors.HairlineBorder),
+        shadowElevation = 6.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(accent.copy(alpha = 0.12f))
-                    .border(1.dp, accent.copy(alpha = 0.32f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                when (state) {
-                    ToastState.Checking -> CircularProgressIndicator(
-                        modifier = Modifier.size(12.5.dp),
-                        strokeWidth = 1.6.dp,
-                        color = accent,
-                    )
+            when (state) {
+                ToastState.Checking -> CircularProgressIndicator(
+                    modifier = Modifier.size(11.dp),
+                    strokeWidth = 1.4.dp,
+                    color = TrackerColors.TextSecondary,
+                )
 
-                    ToastState.UpToDate -> Text(
-                        text = "✓",
-                        fontSize = 13.sp,
-                        lineHeight = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accent,
-                    )
-
-                    ToastState.Failed -> Text(
-                        text = "!",
-                        fontSize = 14.sp,
-                        lineHeight = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accent,
-                    )
-                }
+                ToastState.UpToDate, ToastState.Failed -> Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(accent, CircleShape),
+                )
             }
 
-            Spacer(Modifier.width(11.dp))
+            Spacer(Modifier.width(8.dp))
 
-            // The icon stays put while only the copy cross-fades, so a state
-            // change reads as the same card updating rather than a new one.
+            // Only the copy cross-fades; the dot or spinner stays in place.
             AnimatedContent(
                 targetState = state,
-                modifier = Modifier.weight(1f),
                 transitionSpec = {
                     fadeIn(motionTween(Motion.Base, delayMillis = Motion.Fast / 2))
                         .togetherWith(fadeOut(motionTween(Motion.Fast)))
@@ -271,9 +236,9 @@ private fun StatusToast(
             ) { current ->
                 Text(
                     text = current.title(),
-                    fontSize = 12.5.sp,
+                    fontSize = 12.sp,
                     lineHeight = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = TrackerColors.TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -281,14 +246,12 @@ private fun StatusToast(
             }
 
             if (canRetry) {
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(9.dp))
                 Text(
-                    text = "RETRY",
-                    fontSize = 9.5.sp,
-                    lineHeight = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 0.8.sp,
+                    text = "Retry",
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = TrackerColors.WarningAmber,
                 )
             }
@@ -298,8 +261,8 @@ private fun StatusToast(
 
 private fun ToastState.title(): String = when (this) {
     ToastState.Checking -> "Checking for updates"
-    ToastState.UpToDate -> "You're up to date"
-    ToastState.Failed -> "Couldn't check for updates"
+    ToastState.UpToDate -> "Up to date"
+    ToastState.Failed -> "Couldn't check"
 }
 
 // ─────────────────────────────────────────────────────────────
