@@ -1,30 +1,40 @@
 {
-  "latest_version": "1.1.0",
-  "latest_build": 4,
-  "apk_build": 4,
-  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.1.0/viit-tracker-1.1.0.apk",
+  "latest_version": "1.2.0",
+  "latest_build": 5,
+  "apk_build": 5,
+  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0.apk",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.1.0/viit-tracker-1.1.0-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.1.0/viit-tracker-1.1.0-armeabi-v7a.apk",
-    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.1.0/viit-tracker-1.1.0-x86_64.apk"
+    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0-armeabi-v7a.apk",
+    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0-x86_64.apk"
   },
   "apk_builds": {
-    "arm64-v8a": 4,
-    "armeabi-v7a": 4,
-    "x86_64": 4
+    "arm64-v8a": 5,
+    "armeabi-v7a": 5,
+    "x86_64": 5
   },
   "sha256": {
-    "arm64-v8a": "07002568987fff14732c6a78807d187bf460f160fbca319fdcf949d6ee5eb7c1",
-    "armeabi-v7a": "bab38f8d242d949bf802e406085be2d8df0940cd780ba21d87dc8846bf1bb953",
-    "x86_64": "c08745c1844692e2276cca60b1c4f8abea54202e49cab25883a82277e8f3d5d6",
-    "universal": "a46037ed53f959b5a373a2444eb2a593b58a07f3594a8afaa9b12ddf73d57cc5"
+    "arm64-v8a": "c4c2966499e2baa5bd41ad5533e56881247ff0a68cdcf29064747db701b6b013",
+    "armeabi-v7a": "c3165a24920bc6524bd3658732e50dc86243e0921af035957548d38b49683ad1",
+    "x86_64": "d45f99c31712fb3fe26c7e53f044705582a821df8e6e0c62bdc60e74a1a4f589",
+    "universal": "d7d24549e25bce56f9f24a4f282b65c9b7331d9f59816b6211894861707a3c0d"
   },
   "changelog": [
-    "Under-the-hood fixes for a better experience",
-    "Refined profile screen"
+    "Mark bunked periods from the dashboard, using today's portal period count",
+    "Cleaner, one-line update check status with in-place retry",
+    "Under-the-hood performance improvements"
   ],
   "force_update": false,
   "history": [
+    {
+      "version": "1.2.0",
+      "build": 5,
+      "changelog": [
+        "Mark bunked periods from the dashboard, using today's portal period count",
+        "Cleaner, one-line update check status with in-place retry",
+        "Under-the-hood performance improvements"
+      ]
+    },
     {
       "version": "1.1.0",
       "build": 4,
