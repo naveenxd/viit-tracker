@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -267,8 +266,10 @@ fun AttendanceScreen() {
                 .background(TrackerColors.PureBlack)
         ) {
             val screenState = when {
-                isInitializing -> MainScreenState.INITIALIZING
+                isInitializing -> MainScreenState.SKELETON
                 !isSessionActive -> MainScreenState.LOGIN
+                // First snapshot after launch, with no cached copy to show.
+                attendanceData == null && isLoading -> MainScreenState.SKELETON
                 else -> MainScreenState.DASHBOARD
             }
 
@@ -281,18 +282,10 @@ fun AttendanceScreen() {
                 label = "mainScreenTransition"
             ) { state ->
                 when (state) {
-                    MainScreenState.INITIALIZING -> {
-                        // Brief check for a stored session — just a tiny spinner.
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                color = TrackerColors.TextMuted,
-                                strokeWidth = 2.dp
-                            )
-                        }
+                    MainScreenState.SKELETON -> {
+                        // Hold the home layout while the stored session and the
+                        // first snapshot resolve; cached snapshots skip this.
+                        DashboardSkeleton()
                     }
                     MainScreenState.LOGIN -> {
                         LoginScreen(
@@ -342,7 +335,7 @@ fun AttendanceScreen() {
 }
 
 private enum class MainScreenState {
-    INITIALIZING,
+    SKELETON,
     LOGIN,
     DASHBOARD
 }
