@@ -323,12 +323,22 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
         // ── Result ───────────────────────────────────────────────────────
         // Keyed on which state is showing rather than on the report itself, so a
         // re-query that lands on the same card does not re-animate it.
+        val currentReport = report
         val resultState = when {
             isReportLoading -> ReportState.LOADING
             error != null -> ReportState.ERROR
-            report != null && report!!.subjects.isEmpty() -> ReportState.EMPTY
-            report != null -> ReportState.RESULT
+            currentReport != null && currentReport.subjects.isEmpty() -> ReportState.EMPTY
+            currentReport != null -> ReportState.RESULT
             else -> ReportState.IDLE
+        }
+
+        // AnimatedContent keeps rendering the outgoing state while it fades out,
+        // so the RESULT exit frame can still run after `report` is cleared (e.g.
+        // switching to FROM-TO). Hold the last report for that frame instead of
+        // force-unwrapping a value that is already null.
+        var lastReport by remember { mutableStateOf<AttendanceReportResponse?>(null) }
+        LaunchedEffect(currentReport) {
+            if (currentReport != null) lastReport = currentReport
         }
 
         AnimatedContent(
@@ -340,7 +350,10 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
                 ReportState.LOADING -> ReportSkeleton()
                 ReportState.ERROR -> ReportErrorCard(error ?: "", onRetry = { loadForMode() })
                 ReportState.EMPTY -> ReportEmptyCard(requestedRange)
-                ReportState.RESULT -> ReportResultCard(report!!, requestedRange)
+                ReportState.RESULT -> {
+                    val snapshot = currentReport ?: lastReport
+                    if (snapshot != null) ReportResultCard(snapshot, requestedRange)
+                }
                 ReportState.IDLE -> Spacer(modifier = Modifier.height(0.dp))
             }
         }

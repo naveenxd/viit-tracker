@@ -68,14 +68,14 @@ Debug builds:
 GitHub release APKs:
 
 ```bash
-VERSION_CODE=5 VERSION_NAME=1.2.0 ENABLE_ABI_SPLITS=true \
+VERSION_CODE=6 VERSION_NAME=1.2.1 ENABLE_ABI_SPLITS=true \
   ./gradlew :androidApp:assembleGithubRelease
 ```
 
 Play Store AAB:
 
 ```bash
-VERSION_CODE=5 VERSION_NAME=1.2.0 ./gradlew :androidApp:bundlePlayRelease
+VERSION_CODE=6 VERSION_NAME=1.2.1 ./gradlew :androidApp:bundlePlayRelease
 ```
 
 AAB output:
@@ -99,8 +99,8 @@ On a `v*` tag, CI:
 Manual workflow runs produce the same artifacts without creating a release.
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.2.1
+git push origin v1.2.1
 ```
 
 Keep `VERSION_CODE` strictly increasing and never reuse a code for Play.
