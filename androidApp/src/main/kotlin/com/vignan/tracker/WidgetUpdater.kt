@@ -8,11 +8,13 @@ import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.Toast
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -47,17 +49,55 @@ object WidgetUpdater {
     /** Monotonic id of the last render — lets a delayed re-render detect staleness. */
     private val renderSeq = AtomicInteger(0)
 
+    /** Guards the shared-cache observer so one process installs at most one. */
+    private val observing = AtomicBoolean(false)
+
     // ---------------------------------------------------------------- entry points
 
     /**
-     * Push the latest known data into all widget instances.
-     * Uses the encrypted cache — instant, no network. Called from [onUpdate].
+     * Push the latest known data into all widget instances and start listening
+     * for snapshots fetched by the app. Cache-only: no network.
+     *
+     * Called from [onUpdate] and from the activity so an app fetch can update
+     * widgets that are already on the home screen.
      */
     fun updateAll(context: Context) {
         val appContext = context.applicationContext
         scope.launch {
+            val manager = AppWidgetManager.getInstance(appContext)
+            val ids = manager.getAppWidgetIds(ComponentName(appContext, AttendanceAppWidget::class.java))
+            if (ids.isEmpty()) return@launch
+
             val data = loadCached(appContext) ?: WidgetData.syncing()
+            startObserving(appContext)
             renderAll(appContext, data)
+        }
+    }
+
+    /**
+     * Re-render whenever the app (or another writer) publishes a snapshot.
+     * Snapshots sourced from this widget are skipped: the tap/schedule paths
+     * already render them with their own transient footer feedback.
+     */
+    private fun startObserving(context: Context) {
+        if (!observing.compareAndSet(false, true)) return
+
+        scope.launch {
+            AttendanceCache.snapshot.collect { entry ->
+                if (entry == null || entry.source == AttendanceSnapshotSource.WIDGET) {
+                    return@collect
+                }
+                renderAll(context, WidgetData.from(entry.response))
+            }
+        }
+
+        // Logout/expired session from the app should clear the widget too.
+        scope.launch {
+            AttendanceCache.invalidations.collect { event ->
+                if (event.source != AttendanceSnapshotSource.WIDGET) {
+                    renderAll(context, WidgetData.syncing())
+                }
+            }
         }
     }
 
@@ -84,7 +124,9 @@ object WidgetUpdater {
                 val before = loadCached(appContext) ?: WidgetData.syncing()
                 renderAll(appContext, before.asSyncing())
 
-                val result = AttendanceRepository().fetchLiveAttendance()
+                val result = AttendanceRepository().fetchLiveAttendance(
+                    source = AttendanceSnapshotSource.WIDGET
+                )
                 val outcome = result.fold(
                     onSuccess = { resp ->
                         WidgetRefreshOutcome(
@@ -159,7 +201,9 @@ object WidgetUpdater {
                 if (!locked) return@launch
 
                 val before = loadCached(appContext) ?: WidgetData.syncing()
-                val result = AttendanceRepository().fetchLiveAttendance()
+                val result = AttendanceRepository().fetchLiveAttendance(
+                    source = AttendanceSnapshotSource.WIDGET
+                )
                 val data = result.fold(
                     onSuccess = { WidgetData.from(it) },
                     onFailure = { err ->

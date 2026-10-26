@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @Composable
@@ -96,9 +97,9 @@ fun AttendanceScreen() {
                 )
                 lastFetchDurationMs = System.currentTimeMillis() - fetchStartedAt
                 result.fold(
-                    onSuccess = { liveResp ->
-                        liveAttendanceResponse = liveResp
-                        attendanceData = liveResp.toAttendanceResponse()
+                    onSuccess = {
+                        // AttendanceCache published the snapshot; the collector
+                        // above applies it to the dashboard.
                     },
                     onFailure = { error ->
                         val friendlyMsg = error.toUserMessage()
@@ -127,6 +128,31 @@ fun AttendanceScreen() {
         }
     }
 
+    // The widget fetches through the same repository, so its snapshots arrive
+    // here without a second network call. Keeping this screen on the shared
+    // stream also means a widget refresh updates an already-open dashboard.
+    LaunchedEffect(Unit) {
+        AttendanceCache.snapshot.collect { entry ->
+            val response = entry?.response ?: return@collect
+            liveAttendanceResponse = response
+            attendanceData = response.toAttendanceResponse()
+        }
+    }
+
+    // A widget tap can discover an expired session while the app is open. Drop
+    // the dashboard and let the login screen explain what happened.
+    LaunchedEffect(Unit) {
+        AttendanceCache.invalidations.collect {
+            if (isInitializing || !isSessionActive) return@collect
+            isSessionActive = false
+            liveAttendanceResponse = null
+            attendanceData = null
+            if (errorMessage == null) {
+                errorMessage = "Session expired. Please log in again."
+            }
+        }
+    }
+
     fun fetchAttendance() {
         if (rollNumber.isBlank() || password.isBlank()) {
             errorMessage = "Please enter both Registration Number and Password."
@@ -148,9 +174,9 @@ fun AttendanceScreen() {
             )
             lastFetchDurationMs = System.currentTimeMillis() - fetchStartedAt
             result.fold(
-                onSuccess = { liveResp ->
-                    liveAttendanceResponse = liveResp
-                    attendanceData = liveResp.toAttendanceResponse()
+                onSuccess = {
+                    // The cache collector paints the response; this only moves
+                    // the login flow into the dashboard.
                     isSessionActive = true
                 },
                 onFailure = { error ->

@@ -54,6 +54,10 @@ class MainActivity : ComponentActivity() {
         // Fire-and-forget; debug builds and builds without a key are no-ops.
         AnalyticsPinger.pingIfDue(applicationContext)
 
+        // Keep the widget on the same snapshot as the app: render the cache now
+        // and observe later app fetches. No-op when no widget is placed.
+        WidgetUpdater.updateAll(applicationContext)
+
         setContent {
             TrackerTheme {
                 // "What's new" sits above the updater so the post-update sheet

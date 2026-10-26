@@ -16,6 +16,13 @@ class AttendanceRepository(
     companion object {
         private const val MAX_ATTEMPTS_PER_HOUR = 10
         private const val TWO_DAYS_MS = 48 * 60 * 60 * 1000L
+
+        /**
+         * Serializes live fetches across every repository instance in the
+         * process. The app and the widget share one portal session; letting
+         * both scrape at once can commit an older response after a newer one.
+         */
+        private val fetchMutex = Mutex()
     }
 
     suspend fun getStoredCredentials(): StoredCredentials? = store.load()
@@ -25,10 +32,8 @@ class AttendanceRepository(
         return (currentTimeMs - creds.lastLoginTimestamp) < TWO_DAYS_MS
     }
 
-    suspend fun getCachedAttendanceResponse(): LiveAttendanceResponse? {
-        val json = store.getCachedAttendance() ?: return null
-        return runCatching { AppJson.decodeFromString<LiveAttendanceResponse>(json) }.getOrNull()
-    }
+    suspend fun getCachedAttendanceResponse(): LiveAttendanceResponse? =
+        AttendanceCache.load(store)?.response
 
     /** True when credentials verified AND persisted. */
     suspend fun login(rollNo: String, password: String, rememberMe: Boolean = true, currentTimeMs: Long = System.currentTimeMillis()): Result<Unit> {
@@ -55,24 +60,27 @@ class AttendanceRepository(
         password: String? = null,
         rememberMe: Boolean = true,
         targetPct: Double = 75.0,
-        currentTimeMs: Long = System.currentTimeMillis()
-    ): Result<LiveAttendanceResponse> {
+        currentTimeMs: Long = System.currentTimeMillis(),
+        source: AttendanceSnapshotSource = AttendanceSnapshotSource.APP
+    ): Result<LiveAttendanceResponse> = fetchMutex.withLock {
         val r = rollNo
         val p = password
         val creds = if (!r.isNullOrBlank() && !p.isNullOrBlank()) {
             StoredCredentials(r.trim(), p, rememberMe, currentTimeMs)
         } else {
-            store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
+            store.load() ?: return@withLock Result.failure(IllegalStateException("Not logged in"))
         }
 
-        return try {
+        try {
             val response = api.liveAttendance(CredentialsRequest(creds.rollNo, creds.password), targetPct)
-            // Save valid credentials & cache response on successful fetch
+            // Save valid credentials & publish the one shared snapshot. Publishing
+            // persists the cache and wakes the other surface.
             store.save(creds.copy(lastLoginTimestamp = currentTimeMs))
-            store.saveCachedAttendance(AppJson.encodeToString(LiveAttendanceResponse.serializer(), response))
+            AttendanceCache.publish(response, source, store)
             Result.success(response)
         } catch (e: ApiError.InvalidCredentials) {
             store.clear()
+            AttendanceCache.invalidate(source)
             Result.failure(e)
         } catch (e: Throwable) {
             Result.failure(e)
@@ -120,5 +128,13 @@ class AttendanceRepository(
         }
     }
 
-    suspend fun logout() = store.clear()
+    suspend fun logout() {
+        // Wait for an in-flight fetch first. Otherwise a widget refresh that
+        // already read the old credentials can finish after this and publish
+        // the logged-out session right back into the cache.
+        fetchMutex.withLock {
+            store.clear()
+            AttendanceCache.invalidate(AttendanceSnapshotSource.APP)
+        }
+    }
 }
