@@ -1,31 +1,36 @@
 {
-  "latest_version": "1.2.0",
-  "latest_build": 5,
-  "apk_build": 5,
-  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0.apk",
+  "latest_version": "1.2.1",
+  "latest_build": 6,
+  "apk_build": 6,
+  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.1/viit-tracker-1.2.1.apk",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0-armeabi-v7a.apk",
-    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.0/viit-tracker-1.2.0-x86_64.apk"
+    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.1/viit-tracker-1.2.1-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.1/viit-tracker-1.2.1-armeabi-v7a.apk",
+    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.2.1/viit-tracker-1.2.1-x86_64.apk"
   },
   "apk_builds": {
-    "arm64-v8a": 5,
-    "armeabi-v7a": 5,
-    "x86_64": 5
+    "arm64-v8a": 6,
+    "armeabi-v7a": 6,
+    "x86_64": 6
   },
   "sha256": {
-    "arm64-v8a": "c4c2966499e2baa5bd41ad5533e56881247ff0a68cdcf29064747db701b6b013",
-    "armeabi-v7a": "c3165a24920bc6524bd3658732e50dc86243e0921af035957548d38b49683ad1",
-    "x86_64": "d45f99c31712fb3fe26c7e53f044705582a821df8e6e0c62bdc60e74a1a4f589",
-    "universal": "d7d24549e25bce56f9f24a4f282b65c9b7331d9f59816b6211894861707a3c0d"
+    "arm64-v8a": "00a4bcf540c28ff5235f6b2de1fdc07abcc5becd26927f5e1937557a4982e084",
+    "armeabi-v7a": "39b6cde3be9324b885ed3da1a5831f7e3b4cc3caeff0ce1efe82b42a831df504",
+    "x86_64": "8c1271c4cc903662d5e714d8a8769c9cc7becc58aa6e299d9217713f9764b20e",
+    "universal": "14c1efd62f27e704a60c27fc45cb64777ab35d41388c2ea45ec0d24b833c8c98"
   },
   "changelog": [
-    "Mark bunked periods from the dashboard, using today's portal period count",
-    "Cleaner, one-line update check status with in-place retry",
-    "Under-the-hood performance improvements"
+    "Fixed a crash when switching the attendance report to FROM - TO"
   ],
   "force_update": false,
   "history": [
+    {
+      "version": "1.2.1",
+      "build": 6,
+      "changelog": [
+        "Fixed a crash when switching the attendance report to FROM - TO"
+      ]
+    },
     {
       "version": "1.2.0",
       "build": 5,
