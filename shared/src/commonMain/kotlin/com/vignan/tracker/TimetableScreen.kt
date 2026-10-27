@@ -311,7 +311,9 @@ fun TimetableScreen(
             ) { day ->
                 val dayItems = weekly[day].orEmpty()
                 if (dayItems.isEmpty()) {
-                    NoClassesCard(isSunday = day == 0)
+                    NoClassesCard(
+                        isSunday = day == 0 && !AppSettings.sundayClassesEnabled
+                    )
                 } else {
                     SlotGrid(
                         dayItems = dayItems,

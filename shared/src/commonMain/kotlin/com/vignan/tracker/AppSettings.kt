@@ -29,6 +29,14 @@ object AppSettings {
         private set
 
     /**
+     * Whether Sunday counts as a normal class day. Off by default: the college
+     * usually shuts on Sundays, and the projection/picker grey the day out. On,
+     * Sunday follows its timetable row and can be planned like any weekday.
+     */
+    var sundayClassesEnabled by mutableStateOf(false)
+        private set
+
+    /**
      * The register's RAW matrix: false (default) trails the per-subject totals
      * after the last date, true pins them to the right edge while the dates
      * scroll underneath. Flipped from Settings, not from the matrix itself.
@@ -75,6 +83,7 @@ object AppSettings {
         use24HourClock = store.getUse24HourClock() ?: false
         registerTotalsPinned = store.getRegisterTotalsPinned() ?: false
         store.getMotionEnabled()?.let { motionEnabled = it }
+        store.getSundayClassesEnabled()?.let { sundayClassesEnabled = it }
         // Only overwrite when something was actually saved: primeThemeMode may
         // already have restored the values, and the async read must not undo
         // them on the way up.
@@ -107,6 +116,14 @@ object AppSettings {
     suspend fun setMotionEnabled(enabled: Boolean, store: CredentialStore = getCredentialStore()) {
         motionEnabled = enabled
         store.saveMotionEnabled(enabled)
+    }
+
+    suspend fun setSundayClassesEnabled(
+        enabled: Boolean,
+        store: CredentialStore = getCredentialStore()
+    ) {
+        sundayClassesEnabled = enabled
+        store.saveSundayClassesEnabled(enabled)
     }
 
     /**

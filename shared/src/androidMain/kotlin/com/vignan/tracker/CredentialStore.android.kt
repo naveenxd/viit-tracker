@@ -183,6 +183,20 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         return if (prefs.contains("motion_enabled")) prefs.getBoolean("motion_enabled", true) else null
     }
 
+    override suspend fun getSundayClassesEnabled(): Boolean? {
+        val prefs = getPrefs() ?: return null
+        return if (prefs.contains("sunday_classes_enabled")) {
+            prefs.getBoolean("sunday_classes_enabled", false)
+        } else {
+            null
+        }
+    }
+
+    override suspend fun saveSundayClassesEnabled(enabled: Boolean) {
+        val prefs = getPrefs() ?: return
+        prefs.edit().putBoolean("sunday_classes_enabled", enabled).apply()
+    }
+
     private companion object {
         /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
         const val UI_PREFS = "viit_ui_prefs"

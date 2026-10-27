@@ -61,10 +61,11 @@ internal fun TodayPeriodBunkCard(
 
     val isHoliday = todayKey in ProjectionMarks.holidayDates
     val isFullDayLeave = todayKey in ProjectionMarks.absentDates
-    val isSunday = java.util.Calendar.getInstance()
-        .apply { timeInMillis = nowMillis }
-        .get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY &&
-        !DEBUG_PERIOD_BUNK_ON_SUNDAY
+    val sundayClasses = AppSettings.sundayClassesEnabled
+    val isSunday = isSundayOffDay(
+        java.util.Calendar.getInstance().apply { timeInMillis = nowMillis },
+        sundayClasses
+    )
     val blocked = isHoliday || isFullDayLeave || isSunday
 
     val bookedPeriods = remember(liveResponse, nowMillis) {
@@ -87,9 +88,9 @@ internal fun TodayPeriodBunkCard(
 
     val selected = ProjectionMarks.bunkedPeriodsToday
     val selectedValid = selected intersect remaining
-    val summary = remember(liveResponse, selectedValid, blocked, todayKey) {
+    val summary = remember(liveResponse, selectedValid, blocked, todayKey, sundayClasses) {
         liveResponse?.let {
-            todayBunkSummary(it, selectedValid, nowMillis, blocked)
+            todayBunkSummary(it, selectedValid, nowMillis, blocked, sundayClasses)
         }
     }
 

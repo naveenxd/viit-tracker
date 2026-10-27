@@ -5,6 +5,8 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TodayBunkSummaryTest {
@@ -12,6 +14,12 @@ class TodayBunkSummaryTest {
     /** Monday, 2 Nov 2026, 10:00 local — a normal working day for the projection. */
     private val monday = Calendar.getInstance().apply {
         set(2026, Calendar.NOVEMBER, 2, 10, 0, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    /** Sunday, 1 Nov 2026, 10:00 local — off unless Working Sundays is enabled. */
+    private val sunday = Calendar.getInstance().apply {
+        set(2026, Calendar.NOVEMBER, 1, 10, 0, 0)
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis
 
@@ -46,6 +54,42 @@ class TodayBunkSummaryTest {
 
         assertEquals(102, twoPicks.held)
         assertTrue(twoPicks.percentage < onePick.percentage)
+    }
+
+    @Test
+    fun sundayIsOffUntilWorkingSundaysIsEnabled() {
+        val live = liveWithSevenPeriods(sunday, attended = 80, held = 100)
+        val cal = Calendar.getInstance().apply { timeInMillis = sunday }
+
+        assertTrue(isSundayOffDay(cal, sundayClassesEnabled = false))
+        assertNull(todayBunkSummary(live, setOf(1), sunday, sundayClassesEnabled = false))
+
+        assertFalse(isSundayOffDay(cal, sundayClassesEnabled = true))
+        assertEquals(101, todayBunkSummary(live, setOf(1), sunday, sundayClassesEnabled = true)?.held)
+    }
+
+    @Test
+    fun projectionUsesTheSundayTimetableOnlyWhenEnabled() {
+        val live = liveWithSevenPeriods(sunday, attended = 80, held = 100)
+
+        val off = buildAttendanceProjection(
+            live = live,
+            days = 1,
+            sundayClassesEnabled = false,
+            nowMillis = sunday
+        ).single()
+        val working = buildAttendanceProjection(
+            live = live,
+            days = 1,
+            sundayClassesEnabled = true,
+            nowMillis = sunday
+        ).single()
+
+        assertTrue(off.isSunday)
+        assertEquals(0, off.classesThatDay)
+
+        assertFalse(working.isSunday)
+        assertEquals(7, working.classesThatDay)
     }
 
     private fun liveWithSevenPeriods(

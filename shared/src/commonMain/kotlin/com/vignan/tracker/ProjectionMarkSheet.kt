@@ -56,7 +56,7 @@ import androidx.compose.ui.unit.sp
 internal enum class MarkKind(val title: String, val explanation: String) {
     HOLIDAY(
         title = "Mark holidays",
-        explanation = "Days the college is shut. Nothing is added to either tally — the same as a Sunday."
+        explanation = "Days the college is shut. Nothing is added to either tally."
     ),
     LEAVE(
         title = "Mark leaves",
@@ -443,9 +443,9 @@ private fun MonthGrid(
 
                         DayCell(
                             dayOfMonth = dayOfMonth,
-                            // Sundays are already off and the past cannot be re-planned,
-                            // so neither is selectable.
-                            enabled = !isSunday && !isPast,
+                            // Sundays are off by default and the past cannot be
+                            // re-planned; Working Sundays makes them selectable.
+                            enabled = (!isSunday || AppSettings.sundayClassesEnabled) && !isPast,
                             selected = key in selected,
                             isToday = key == todayKey,
                             accent = accent,
@@ -573,7 +573,7 @@ internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
 
             HelpRow(
                 title = "10D · 30D · 60D",
-                body = "How far ahead to forecast. Sundays always stay off."
+                body = "How far ahead to forecast. Sundays stay off unless Working Sundays is enabled in Settings."
             )
             HelpRow(
                 title = "Swipe left · bunk",

@@ -45,6 +45,13 @@ interface CredentialStore {
     suspend fun saveMotionEnabled(enabled: Boolean)
 
     /**
+     * Attendance preference: whether Sundays count as normal class days. Null
+     * when never chosen, which reads as "off" — the college's usual week.
+     */
+    suspend fun getSundayClassesEnabled(): Boolean?
+    suspend fun saveSundayClassesEnabled(enabled: Boolean)
+
+    /**
      * Non-suspending peek at the theme, from a plain unencrypted mirror of the
      * value above. The theme has to be correct on the very first frame, and
      * opening the encrypted store is far too slow for that.

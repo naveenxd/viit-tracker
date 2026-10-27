@@ -82,6 +82,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var showSignOutConfirm by remember { mutableStateOf(false) }
     val use24Hour = AppSettings.use24HourClock
+    val sundayClasses = AppSettings.sundayClassesEnabled
     val registerPinned = AppSettings.registerTotalsPinned
     val version = remember { getPlatform().appVersion }
 
@@ -176,6 +177,21 @@ fun SettingsScreen(
                 checked = AppSettings.motionEnabled,
                 onCheckedChange = { enabled ->
                     scope.launch { AppSettings.setMotionEnabled(enabled) }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ------------------------------------------------------ attendance
+        SettingsSection(title = "ATTENDANCE") {
+            SettingsToggleRow(
+                label = "Working Sundays",
+                detail = if (sundayClasses) "Sunday counts as a class day"
+                else "Sunday stays an off day",
+                checked = sundayClasses,
+                onCheckedChange = { enabled ->
+                    scope.launch { AppSettings.setSundayClassesEnabled(enabled) }
                 }
             )
         }

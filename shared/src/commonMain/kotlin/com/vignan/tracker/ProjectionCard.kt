@@ -51,8 +51,8 @@ import kotlin.math.roundToInt
  * overall attendance WILL be at the end of that day if scheduled classes are attended,
  * plus the skippable buffer to stay above 75%.
  *
- * Sundays and days the user marked as holidays are present but greyed out. Supports
- * simulated absences cascading forward.
+ * Sundays (unless Working Sundays is enabled) and days the user marked as holidays
+ * are present but greyed out. Supports simulated absences cascading forward.
  */
 data class ProjectionRow(
     val dateMs: Long,
@@ -202,32 +202,33 @@ private fun skippablePeriods(attended: Int, held: Int): Int =
 private fun dayMapIndex(cal: java.util.Calendar): Int = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
 
 /**
- * DEBUG ONLY: treat Sunday as a working day so the period picker can be tested
- * on a weekend. Sunday uses its own timetable row when the backend has one,
- * otherwise the first scheduled weekday's periods stand in.
- *
- * Set this back to `false` before shipping.
+ * True when [cal] falls on a Sunday and Sundays are off days. Working Sundays
+ * flips this, letting the projection and the period picker treat the day like
+ * any other weekday.
  */
-internal const val DEBUG_PERIOD_BUNK_ON_SUNDAY = false
+internal fun isSundayOffDay(
+    cal: java.util.Calendar,
+    sundayClassesEnabled: Boolean = AppSettings.sundayClassesEnabled
+): Boolean =
+    cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY &&
+        !sundayClassesEnabled
 
-/** Today's timetable rows, with the debug-only Sunday fallback above. */
+/**
+ * Today's timetable rows. On a working Sunday this is the Sunday row when the
+ * backend has one; the picker can still add periods the timetable omits.
+ */
 private fun todayTimetableItems(
     weekly: Map<Int, List<TTItem>>,
-    cal: java.util.Calendar
+    cal: java.util.Calendar,
+    sundayClassesEnabled: Boolean = AppSettings.sundayClassesEnabled
 ): List<TTItem> {
     val idx = dayMapIndex(cal)
     if (idx != 0) return weekly[idx].orEmpty()
-    if (!DEBUG_PERIOD_BUNK_ON_SUNDAY) return emptyList()
-    return weekly[0].orEmpty().ifEmpty {
-        weekly.entries
-            .filter { it.key != 0 }
-            .minByOrNull { it.key }
-            ?.value
-            .orEmpty()
-    }
+    if (!sundayClassesEnabled) return emptyList()
+    return weekly[0].orEmpty()
 }
 
-/** Classes for a weekday from the weekly timetable; Sunday/holiday → 0. */
+/** Classes for a weekday from the weekly timetable; off days → 0. */
 private fun scheduledClasses(weekly: Map<Int, List<TTItem>>, mapIdx: Int): Int =
     weekly[mapIdx].orEmpty().sumOf { it.slots.size }
 
@@ -314,11 +315,12 @@ internal fun todayPeriodSlots(
 private fun remainingTodaySlots(
     live: LiveAttendanceResponse,
     cal: java.util.Calendar,
-    picked: Set<Int> = emptySet()
+    picked: Set<Int> = emptySet(),
+    sundayClassesEnabled: Boolean = AppSettings.sundayClassesEnabled
 ): List<Int> {
     val booked = todayBookedPeriods(live, cal.timeInMillis)
     val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
-    val scheduled = todayTimetableItems(weekly, cal)
+    val scheduled = todayTimetableItems(weekly, cal, sundayClassesEnabled)
         .flatMap { it.slots }
         .filter { it > booked }
     // Picks are an explicit "this class exists" from the user; honour them even
@@ -360,17 +362,16 @@ internal fun todayBunkSummary(
     live: LiveAttendanceResponse,
     bunkedPeriods: Set<Int>,
     nowMillis: Long = System.currentTimeMillis(),
-    blocked: Boolean = false
+    blocked: Boolean = false,
+    sundayClassesEnabled: Boolean = AppSettings.sundayClassesEnabled
 ): TodayBunkSummary? {
     val agg = live.profile.aggregate
     if (agg.held <= 0 || blocked) return null
 
     val cal = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
-    if (cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY &&
-        !DEBUG_PERIOD_BUNK_ON_SUNDAY
-    ) return null
+    if (isSundayOffDay(cal, sundayClassesEnabled)) return null
 
-    val remaining = remainingTodaySlots(live, cal, bunkedPeriods)
+    val remaining = remainingTodaySlots(live, cal, bunkedPeriods, sundayClassesEnabled)
     val picked = remaining.count { it in bunkedPeriods }
     val attended = agg.attended
     val held = agg.held + picked
@@ -394,23 +395,26 @@ internal fun todayBunkSummary(
  *   device clock.
  * - Future days (starting tomorrow) project attendance assuming scheduled classes are attended,
  *   or missed if included in [absentDates].
- * - Sundays, and any day in [holidayDates], are present in sequence but marked as off days:
- *   0 classes, percentages carried forward, greyed out. A holiday is the user saying the
- *   college does not run that day, so nothing is added to either tally — unlike an absence,
- *   which still counts the classes as held. When a date is in both sets the holiday wins.
+ * - Sundays (unless [sundayClassesEnabled]), and any day in [holidayDates], are present in
+ *   sequence but marked as off days: 0 classes, percentages carried forward, greyed out.
+ *   A holiday is the user saying the college does not run that day, so nothing is added to
+ *   either tally — unlike an absence, which still counts the classes as held. When a date
+ *   is in both sets the holiday wins.
  */
 fun buildAttendanceProjection(
     live: LiveAttendanceResponse,
     days: Int,
     absentDates: Set<String> = emptySet(),
     holidayDates: Set<String> = emptySet(),
-    bunkedPeriodsToday: Set<Int> = emptySet()
+    bunkedPeriodsToday: Set<Int> = emptySet(),
+    sundayClassesEnabled: Boolean = AppSettings.sundayClassesEnabled,
+    nowMillis: Long = System.currentTimeMillis()
 ): List<ProjectionRow> {
     val agg = live.profile.aggregate
     if (agg.held <= 0) return emptyList()
 
     val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
-    val cal = java.util.Calendar.getInstance()
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
     // "d MMM" (e.g. "23 Sep") keeps dates compact and guarantees room for labels without clipping
     val dateFormat = java.text.SimpleDateFormat(PROJECTION_DATE_PATTERN, java.util.Locale.US)
 
@@ -419,8 +423,7 @@ fun buildAttendanceProjection(
     val rows = mutableListOf<ProjectionRow>()
 
     // Row 0 — TODAY at end-of-day: snapshot + the classes still ahead of the scrape
-    val isTodaySunday = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY &&
-        !DEBUG_PERIOD_BUNK_ON_SUNDAY
+    val isTodaySunday = isSundayOffDay(cal, sundayClassesEnabled)
     val todayDateText = dateFormat.format(java.util.Date(cal.timeInMillis))
     val isTodayHoliday = !isTodaySunday && todayDateText in holidayDates
 
@@ -438,7 +441,12 @@ fun buildAttendanceProjection(
             isAbsent = false
         )
     } else {
-        val remainingSlots = remainingTodaySlots(live, cal, bunkedPeriodsToday)
+        val remainingSlots = remainingTodaySlots(
+            live,
+            cal,
+            bunkedPeriodsToday,
+            sundayClassesEnabled
+        )
         val todayClasses = remainingSlots.size
         val isTodayAbsent = todayDateText in absentDates
         val todayBunks = if (isTodayAbsent) {
@@ -474,7 +482,7 @@ fun buildAttendanceProjection(
     while (rows.size < days) {
         cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
 
-        val isSunday = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
+        val isSunday = isSundayOffDay(cal, sundayClassesEnabled)
         val dateText = dateFormat.format(java.util.Date(cal.timeInMillis))
         val isHoliday = !isSunday && dateText in holidayDates
 
@@ -540,6 +548,7 @@ fun ProjectionCard(
     val absentDates = ProjectionMarks.absentDates
     val holidayDates = ProjectionMarks.holidayDates
     val bunkedPeriodsToday = ProjectionMarks.bunkedPeriodsToday
+    val sundayClasses = AppSettings.sundayClassesEnabled
     // Recompute the projection when the calendar day rolls over, so the "today"
     // row and its remaining classes stay correct without a refetch.
     var dayStamp by remember { mutableStateOf(dayKey(java.util.Calendar.getInstance().time)) }
@@ -554,9 +563,24 @@ fun ProjectionCard(
         }
     }
 
-    val rows = remember(liveResponse, range, absentDates, holidayDates, bunkedPeriodsToday, dayStamp) {
+    val rows = remember(
+        liveResponse,
+        range,
+        absentDates,
+        holidayDates,
+        bunkedPeriodsToday,
+        sundayClasses,
+        dayStamp
+    ) {
         liveResponse?.let {
-            buildAttendanceProjection(it, range, absentDates, holidayDates, bunkedPeriodsToday)
+            buildAttendanceProjection(
+                it,
+                range,
+                absentDates,
+                holidayDates,
+                bunkedPeriodsToday,
+                sundayClasses
+            )
         } ?: emptyList()
     }
 
