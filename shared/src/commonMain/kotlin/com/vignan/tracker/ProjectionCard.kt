@@ -340,7 +340,7 @@ internal fun todayRemainingPeriods(
     return SLOTS.map { it.n }.filter { it > booked }.toSet()
 }
 
-/** End-of-today attendance if the picked periods are bunked and the rest attended. */
+/** Attendance if the picked periods are bunked: held grows, attended does not. */
 internal data class TodayBunkSummary(
     val remainingPeriods: Int,
     val bunkedPeriods: Int,
@@ -350,9 +350,11 @@ internal data class TodayBunkSummary(
 )
 
 /**
- * The same arithmetic as projection row 0, exposed so the home hero can show
- * what today's period picks would do to the overall percentage without
- * duplicating (and eventually drifting from) the forecast.
+ * What the picked periods cost: each bunk adds a held class without adding an
+ * attended one. Other periods still ahead today are deliberately left out —
+ * they are not attended yet, so counting them here would raise "after skip"
+ * above the current percentage and hide the cost of the bunk. The projection
+ * card remains the end-of-day forecast that assumes those classes are attended.
  */
 internal fun todayBunkSummary(
     live: LiveAttendanceResponse,
@@ -370,8 +372,8 @@ internal fun todayBunkSummary(
 
     val remaining = remainingTodaySlots(live, cal, bunkedPeriods)
     val picked = remaining.count { it in bunkedPeriods }
-    val attended = agg.attended + remaining.size - picked
-    val held = agg.held + remaining.size
+    val attended = agg.attended
+    val held = agg.held + picked
 
     return TodayBunkSummary(
         remainingPeriods = remaining.size,
