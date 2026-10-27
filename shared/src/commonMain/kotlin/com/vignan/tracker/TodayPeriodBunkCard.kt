@@ -108,7 +108,12 @@ internal fun TodayPeriodBunkCard(
             summary?.let { append(" · after skip ${formatPercentage(it.percentage)}") }
         }
         !anySelectable -> "No periods left today."
-        else -> "Portal shows $bookedPeriods booked · only later periods are open."
+        bookedPeriods == 0 -> "Tap any period to mark it as a bunk."
+        else -> buildString {
+            append("$bookedPeriods period")
+            if (bookedPeriods != 1) append("s")
+            append(" already booked · later periods stay open.")
+        }
     }
     val statusColor = when {
         isHoliday || isFullDayLeave -> TrackerColors.WarningAmber

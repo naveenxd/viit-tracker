@@ -69,35 +69,49 @@ class TodayBunkSummaryTest {
     }
 
     @Test
-    fun projectionUsesTheSundayTimetableOnlyWhenEnabled() {
+    fun projectionKeepsSundayOffEvenWhenWorkingSundaysIsEnabled() {
         val live = liveWithSevenPeriods(sunday, attended = 80, held = 100)
 
-        val off = buildAttendanceProjection(
+        val row = buildAttendanceProjection(
             live = live,
             days = 1,
-            sundayClassesEnabled = false,
-            nowMillis = sunday
-        ).single()
-        val working = buildAttendanceProjection(
-            live = live,
-            days = 1,
-            sundayClassesEnabled = true,
             nowMillis = sunday
         ).single()
 
-        assertTrue(off.isSunday)
-        assertEquals(0, off.classesThatDay)
+        assertTrue(row.isSunday)
+        assertEquals(0, row.classesThatDay)
+    }
 
-        assertFalse(working.isSunday)
-        assertEquals(7, working.classesThatDay)
+    @Test
+    fun workingSundaySummaryUsesPickerPeriodsWithoutASundayTimetableRow() {
+        // The timetable has no Sunday row, only Monday. The period picker still
+        // offers all seven slots; the summary must count them all.
+        val live = liveWithSevenPeriods(
+            nowMillis = sunday,
+            attended = 80,
+            held = 100,
+            timetableDay = "Mon"
+        )
+
+        val summary = todayBunkSummary(
+            live = live,
+            bunkedPeriods = (1..7).toSet(),
+            nowMillis = sunday,
+            sundayClassesEnabled = true
+        )
+
+        assertEquals(7, summary?.bunkedPeriods)
+        assertEquals(80, summary?.attended)
+        assertEquals(107, summary?.held)
     }
 
     private fun liveWithSevenPeriods(
         nowMillis: Long,
         attended: Int,
-        held: Int
+        held: Int,
+        timetableDay: String = SimpleDateFormat("EEE", Locale.US).format(nowMillis)
     ): LiveAttendanceResponse {
-        val dayName = SimpleDateFormat("EEE", Locale.US).format(nowMillis)
+        val dayName = timetableDay
         val periods = (1..7).map { slot ->
             TimetablePeriod(
                 slotNumber = slot,

@@ -443,9 +443,9 @@ private fun MonthGrid(
 
                         DayCell(
                             dayOfMonth = dayOfMonth,
-                            // Sundays are off by default and the past cannot be
-                            // re-planned; Working Sundays makes them selectable.
-                            enabled = (!isSunday || AppSettings.sundayClassesEnabled) && !isPast,
+                            // Sundays are already off and the past cannot be re-planned,
+                            // so neither is selectable.
+                            enabled = !isSunday && !isPast,
                             selected = key in selected,
                             isToday = key == todayKey,
                             accent = accent,
@@ -573,7 +573,7 @@ internal fun ProjectionHelpSheet(onDismiss: () -> Unit) {
 
             HelpRow(
                 title = "10D · 30D · 60D",
-                body = "How far ahead to forecast. Sundays stay off unless Working Sundays is enabled in Settings."
+                body = "How far ahead to forecast. Sundays always stay off here, even with Working Sundays on."
             )
             HelpRow(
                 title = "Swipe left · bunk",

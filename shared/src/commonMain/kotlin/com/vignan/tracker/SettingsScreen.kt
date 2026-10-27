@@ -187,8 +187,8 @@ fun SettingsScreen(
         SettingsSection(title = "ATTENDANCE") {
             SettingsToggleRow(
                 label = "Working Sundays",
-                detail = if (sundayClasses) "Sunday counts as a class day"
-                else "Sunday stays an off day",
+                detail = if (sundayClasses) "Period picker works on Sundays · projection stays off"
+                else "Sunday period picker stays locked",
                 checked = sundayClasses,
                 onCheckedChange = { enabled ->
                     scope.launch { AppSettings.setSundayClassesEnabled(enabled) }
