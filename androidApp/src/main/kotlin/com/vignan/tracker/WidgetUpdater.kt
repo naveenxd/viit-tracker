@@ -69,7 +69,10 @@ object WidgetUpdater {
             val compactIds = manager.getAppWidgetIds(
                 ComponentName(appContext, AttendanceAppWidget::class.java)
             )
-            if (compactIds.isEmpty()) return@launch
+            val detailedIds = manager.getAppWidgetIds(
+                ComponentName(appContext, AttendanceDetailedAppWidget::class.java)
+            )
+            if (compactIds.isEmpty() && detailedIds.isEmpty()) return@launch
 
             val data = loadCached(appContext) ?: WidgetData.syncing()
             startObserving(appContext)
@@ -269,6 +272,19 @@ object WidgetUpdater {
             manager.updateAppWidget(compactIds, views)
         }
 
+        val detailedIds = manager.getAppWidgetIds(
+            ComponentName(context, AttendanceDetailedAppWidget::class.java)
+        )
+        if (detailedIds.isNotEmpty()) {
+            val views = RemoteViews(context.packageName, R.layout.widget_attendance_detailed)
+            views.setOnClickPendingIntent(
+                R.id.widget_detailed_container,
+                refreshPendingIntent(context)
+            )
+            bindDetailedData(context, views, data, flash)
+            manager.updateAppWidget(detailedIds, views)
+        }
+
         return seq
     }
 
@@ -381,6 +397,74 @@ object WidgetUpdater {
         )
     }
 
+    /**
+     * Split 4:2 widget: overall stats on the left three-quarters and today's
+     * per-subject attendance chips in the right quarter.
+     */
+    private fun bindDetailedData(
+        context: Context,
+        views: RemoteViews,
+        data: WidgetData,
+        flash: WidgetFlash? = null
+    ) {
+        val hasSnapshot = data.conducted > 0
+
+        bindStatusHeader(
+            context = context,
+            views = views,
+            data = data,
+            flash = flash,
+            nameId = R.id.widget_detail_student_name,
+            rollId = R.id.widget_detail_roll_number,
+            pillId = R.id.widget_detail_status_pill,
+            detailId = R.id.widget_detail_status_detail
+        )
+
+        bindPercentage(
+            context = context,
+            views = views,
+            data = data,
+            numberId = R.id.widget_detail_percentage,
+            fractionId = R.id.widget_detail_percentage_fraction,
+            suffixId = R.id.widget_detail_percentage_suffix
+        )
+        views.setTextViewText(
+            R.id.widget_detail_classes,
+            if (hasSnapshot) "${data.attended} / ${data.conducted}" else "— / —"
+        )
+        views.setTextColor(
+            R.id.widget_detail_classes,
+            context.getColor(if (hasSnapshot) R.color.text_secondary else R.color.text_muted)
+        )
+
+        bindProgress(
+            context = context,
+            views = views,
+            data = data,
+            barIds = intArrayOf(
+                R.id.widget_detail_progress_safe,
+                R.id.widget_detail_progress_warning,
+                R.id.widget_detail_progress_danger,
+                R.id.widget_detail_progress_neutral
+            )
+        )
+
+        bindDetailedChips(context, views, data)
+        views.setTextViewText(R.id.widget_detail_refresh_hint, "↻")
+        views.setTextColor(R.id.widget_detail_refresh_hint, context.getColor(R.color.text_muted))
+
+        views.setContentDescription(
+            R.id.widget_detailed_container,
+            if (hasSnapshot) {
+                "Attendance ${formatPercentage(data.overallPercentage)}, " +
+                    "${data.attended} of ${data.conducted} classes attended. " +
+                    "Today's subject chips on the right. Tap to refresh."
+            } else {
+                "Attendance is syncing. Tap to refresh."
+            }
+        )
+    }
+
     /** Per-subject today chips (up to 3 + "…+N" overflow) or a fallback message. */
     private fun bindTodayChips(
         context: Context,
@@ -436,6 +520,83 @@ object WidgetUpdater {
             views.setContentDescription(moreId, "$overflow more subjects")
         } else {
             views.setViewVisibility(moreId, View.GONE)
+        }
+    }
+
+    /**
+     * Narrow right-rail chips: subject code on the left, P/A count on the right.
+     * Three slots + overflow; short empty-state copy so it wraps cleanly in the
+     * quarter-width column.
+     */
+    private fun bindDetailedChips(context: Context, views: RemoteViews, data: WidgetData) {
+        val rowIds = intArrayOf(
+            R.id.widget_detail_chip_1,
+            R.id.widget_detail_chip_2,
+            R.id.widget_detail_chip_3
+        )
+        val subjectIds = intArrayOf(
+            R.id.widget_detail_chip_subject_1,
+            R.id.widget_detail_chip_subject_2,
+            R.id.widget_detail_chip_subject_3
+        )
+        val countIds = intArrayOf(
+            R.id.widget_detail_chip_count_1,
+            R.id.widget_detail_chip_count_2,
+            R.id.widget_detail_chip_count_3
+        )
+
+        if (data.todayChips.isEmpty()) {
+            rowIds.forEach { views.setViewVisibility(it, View.GONE) }
+            views.setViewVisibility(R.id.widget_detail_chip_more, View.GONE)
+            views.setTextViewText(
+                R.id.widget_detail_today_message,
+                when {
+                    data.isSyncing -> "fetching…"
+                    data.todayNoClasses -> "no classes yet"
+                    data.todayNoRecords -> "no marks yet"
+                    else -> "no classes today"
+                }
+            )
+            views.setTextColor(
+                R.id.widget_detail_today_message,
+                context.getColor(R.color.text_muted)
+            )
+            views.setViewVisibility(R.id.widget_detail_today_message, View.VISIBLE)
+            return
+        }
+
+        views.setViewVisibility(R.id.widget_detail_today_message, View.GONE)
+
+        data.todayChips.take(rowIds.size).forEachIndexed { index, chip ->
+            views.setViewVisibility(rowIds[index], View.VISIBLE)
+            views.setTextViewText(subjectIds[index], chip.subject)
+            views.setTextViewText(countIds[index], chip.countLabel)
+            views.setTextColor(
+                subjectIds[index],
+                context.getColor(R.color.text_secondary)
+            )
+            views.setTextColor(countIds[index], context.getColor(chipColorRes(chip.tone)))
+            views.setInt(
+                rowIds[index],
+                "setBackgroundResource",
+                chipBackgroundRes(chip.tone)
+            )
+            views.setContentDescription(rowIds[index], chip.contentDescription)
+        }
+        for (index in data.todayChips.size until rowIds.size) {
+            views.setViewVisibility(rowIds[index], View.GONE)
+        }
+
+        val overflow = data.todayChips.size - rowIds.size
+        if (overflow > 0) {
+            views.setViewVisibility(R.id.widget_detail_chip_more, View.VISIBLE)
+            views.setTextViewText(R.id.widget_detail_chip_more, "+$overflow more")
+            views.setTextColor(
+                R.id.widget_detail_chip_more,
+                context.getColor(R.color.text_muted)
+            )
+        } else {
+            views.setViewVisibility(R.id.widget_detail_chip_more, View.GONE)
         }
     }
 
