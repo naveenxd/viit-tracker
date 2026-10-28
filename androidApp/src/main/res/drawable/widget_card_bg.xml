@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Widget card: rounded + slightly inset so the launcher's own corner rounding
-     can't clip the border away, with a hairline bright enough to actually read. -->
+     can't clip the border away. A shallow top-down gradient gives the black card
+     a little depth without turning into a glow. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:insetLeft="2dp"
     android:insetTop="2dp"
@@ -8,11 +9,14 @@
     android:insetBottom="2dp">
 
     <shape android:shape="rectangle">
-        <solid android:color="@color/surface_dark" />
+        <gradient
+            android:angle="270"
+            android:endColor="#FF0A0A0B"
+            android:startColor="#FF17181B" />
         <stroke
             android:width="1dp"
             android:color="@color/widget_border" />
-        <corners android:radius="16dp" />
+        <corners android:radius="18dp" />
     </shape>
 
 </inset>

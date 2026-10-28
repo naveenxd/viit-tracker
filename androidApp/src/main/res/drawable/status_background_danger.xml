@@ -5,6 +5,6 @@
     <stroke
         android:width="1dp"
         android:color="#4DEF4444" /> <!-- danger_rose with 30% opacity -->
-    <corners android:radius="6dp" />
+    <corners android:radius="999dp" />
 
 </shape>

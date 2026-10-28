@@ -5,89 +5,110 @@
     android:viewportWidth="250"
     android:viewportHeight="120">
 
-    <!-- Background -->
+    <!-- Card -->
     <path
         android:fillColor="@color/surface_dark"
         android:pathData="M0,0h250v120h-250z" />
 
-    <!-- Widget border -->
+    <!-- Card edge -->
     <path
-        android:strokeColor="@color/hairline_border"
+        android:fillColor="#00000000"
+        android:strokeColor="@color/widget_border"
         android:strokeWidth="1"
-        android:pathData="M5,5h240v110h-240z" />
+        android:pathData="M4.5,4.5h241v111h-241z" />
 
-    <!-- Header: student name bar -->
+    <!-- Header: student name -->
     <path
         android:fillColor="@color/text_primary"
-        android:pathData="M20,18h90v9h-90z" />
+        android:pathData="M18,15h84v8h-84z" />
 
-    <!-- Header: roll number bar -->
+    <!-- Header: roll number -->
     <path
         android:fillColor="@color/text_muted"
-        android:pathData="M20,31h50v6h-50z" />
+        android:pathData="M18,27h44v5h-44z" />
 
-    <!-- Header: status pill (top-right) -->
+    <!-- Verdict pill -->
     <path
-        android:fillColor="#1F10B981"
-        android:strokeColor="#4D10B981"
+        android:fillColor="#1F22C55E"
+        android:strokeColor="#4D22C55E"
         android:strokeWidth="1"
-        android:pathData="M186,16h44v16h-44z" />
+        android:pathData="M186,14h40v15h-40z" />
 
-    <!-- Percentage (big) -->
+    <!-- Verdict detail: "3 periods" -->
+    <path
+        android:fillColor="@color/text_muted"
+        android:pathData="M196,34h30v4h-30z" />
+
+    <!-- Hero: integer part -->
+    <path
+        android:fillColor="@color/text_primary"
+        android:pathData="M18,49h54v21h-54z" />
+
+    <!-- Hero: fraction in verdict colour -->
     <path
         android:fillColor="@color/safe_emerald"
-        android:pathData="M20,52h62v22h-62z" />
+        android:pathData="M74,58h11v11h-11z" />
+
+    <!-- Hero: percent sign -->
+    <path
+        android:fillColor="@color/text_muted"
+        android:pathData="M87,62h5v6h-5z" />
 
     <!-- ATTENDANCE label -->
     <path
         android:fillColor="@color/text_muted"
-        android:pathData="M20,79h40v6h-40z" />
+        android:pathData="M18,75h40v4h-40z" />
 
-    <!-- Classes counter (right) -->
+    <!-- Classes counter -->
     <path
-        android:fillColor="@color/text_primary"
-        android:pathData="M196,52h34v9h-34z" />
+        android:fillColor="@color/text_secondary"
+        android:pathData="M196,52h34v8h-34z" />
 
-    <!-- CLASSES label -->
+    <!-- ATTENDED / HELD label -->
     <path
         android:fillColor="@color/text_muted"
-        android:pathData="M200,66h26v6h-26z" />
+        android:pathData="M188,65h42v4h-42z" />
 
-    <!-- Divider -->
+    <!-- Progress track + fill -->
     <path
-        android:fillColor="@color/hairline_border"
-        android:pathData="M20,92h210v1h-210z" />
+        android:fillColor="#1FFFFFFF"
+        android:pathData="M18,86h214v3h-214z" />
+    <path
+        android:fillColor="@color/safe_emerald"
+        android:pathData="M18,86h181v3h-181z" />
 
     <!-- TODAY label -->
     <path
         android:fillColor="@color/text_muted"
-        android:pathData="M20,100h24v6h-24z" />
+        android:pathData="M18,98h24v4h-24z" />
 
-    <!-- Today chip 1 (present) -->
+    <!-- Today chips: present, absent, mixed -->
     <path
-        android:fillColor="#1F10B981"
-        android:strokeColor="#4D10B981"
+        android:fillColor="#1522C55E"
+        android:strokeColor="#4D22C55E"
         android:strokeWidth="1"
-        android:pathData="M50,98h42v10h-42z" />
-
-    <!-- Today chip 2 (absent) -->
+        android:pathData="M48,94h40v12h-40z" />
     <path
-        android:fillColor="#1FF43F5E"
-        android:strokeColor="#4DF43F5E"
+        android:fillColor="#15EF4444"
+        android:strokeColor="#4DEF4444"
         android:strokeWidth="1"
-        android:pathData="M96,98h42v10h-42z" />
-
-    <!-- Today chip 3 (present) -->
+        android:pathData="M94,94h40v12h-40z" />
     <path
-        android:fillColor="#1F10B981"
-        android:strokeColor="#4D10B981"
+        android:fillColor="#15F59E0B"
+        android:strokeColor="#4DF59E0B"
         android:strokeWidth="1"
-        android:pathData="M142,98h42v10h-42z" />
+        android:pathData="M140,94h40v12h-40z" />
 
-    <!-- Refresh arrow -->
+    <!-- Refresh button -->
     <path
+        android:fillColor="#14FFFFFF"
+        android:strokeColor="#24FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M216,93h16v14h-16z" />
+    <path
+        android:fillColor="#00000000"
         android:strokeColor="@color/text_muted"
         android:strokeWidth="1.5"
-        android:pathData="M222,97a6,6 0 1,1 -2,12" />
+        android:pathData="M222,97a4,4 0 1,1 -2,7" />
 
 </vector>

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * Central widget logic for the attendance widget.
@@ -65,8 +66,10 @@ object WidgetUpdater {
         val appContext = context.applicationContext
         scope.launch {
             val manager = AppWidgetManager.getInstance(appContext)
-            val ids = manager.getAppWidgetIds(ComponentName(appContext, AttendanceAppWidget::class.java))
-            if (ids.isEmpty()) return@launch
+            val compactIds = manager.getAppWidgetIds(
+                ComponentName(appContext, AttendanceAppWidget::class.java)
+            )
+            if (compactIds.isEmpty()) return@launch
 
             val data = loadCached(appContext) ?: WidgetData.syncing()
             startObserving(appContext)
@@ -255,71 +258,119 @@ object WidgetUpdater {
     private fun renderAll(context: Context, data: WidgetData, flash: WidgetFlash? = null): Int {
         val seq = renderSeq.incrementAndGet()
         val manager = AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(ComponentName(context, AttendanceAppWidget::class.java))
-        if (ids.isEmpty()) return seq
 
-        val views = RemoteViews(context.packageName, R.layout.widget_attendance)
-        views.setOnClickPendingIntent(R.id.widget_container, refreshPendingIntent(context))
-        bindData(context, views, data, flash)
-        manager.updateAppWidget(ids, views)
+        val compactIds = manager.getAppWidgetIds(
+            ComponentName(context, AttendanceAppWidget::class.java)
+        )
+        if (compactIds.isNotEmpty()) {
+            val views = RemoteViews(context.packageName, R.layout.widget_attendance)
+            views.setOnClickPendingIntent(R.id.widget_container, refreshPendingIntent(context))
+            bindData(context, views, data, flash)
+            manager.updateAppWidget(compactIds, views)
+        }
+
         return seq
     }
 
     /** Write a [WidgetData] snapshot into the widget layout. */
     private fun bindData(context: Context, views: RemoteViews, data: WidgetData, flash: WidgetFlash? = null) {
-        val pctColor = statusColor(context, data.overallPercentage)
-        val isSafe = !data.isSyncing && data.canSkip
-        val isCritical = !data.isSyncing && !data.canSkip
-        val accentRes = when {
-            data.isSyncing -> R.color.text_muted
-            isSafe -> R.color.safe_emerald
-            else -> R.color.danger_rose
-        }
-        val accent = context.getColor(accentRes)
-        val pillBg = when {
-            data.isSyncing -> R.drawable.status_background_neutral
-            isSafe -> R.drawable.status_background_safe
-            else -> R.drawable.status_background_danger
-        }
+        // A snapshot exists once the portal has held at least one class. While a
+        // refresh is in flight we keep those numbers on screen and only change
+        // the verdict: blanking them made every tap look like a cold start.
+        val hasSnapshot = data.conducted > 0
 
-        // Header
-        views.setTextViewText(
-            R.id.widget_student_name,
-            data.studentName.uppercase().ifBlank { "STUDENT" }
+        bindStatusHeader(
+            context = context,
+            views = views,
+            data = data,
+            flash = flash,
+            nameId = R.id.widget_student_name,
+            rollId = R.id.widget_roll_number,
+            pillId = R.id.widget_status_pill,
+            detailId = R.id.widget_status_detail
         )
-        views.setTextViewText(R.id.widget_roll_number, data.rollNumber.ifBlank { "—" })
 
-        // Status pill
-        views.setTextViewText(
-            R.id.widget_status_pill,
-            when {
-                data.isSyncing -> "SYNCING"
-                isSafe -> "CAN SKIP"
-                else -> "ATTEND"
-            }
+        // Hero percentage — the integer stays white, the fraction takes the
+        // verdict colour, matching the dashboard's hero block.
+        bindPercentage(
+            context = context,
+            views = views,
+            data = data,
+            numberId = R.id.widget_percentage,
+            fractionId = R.id.widget_percentage_fraction,
+            suffixId = R.id.widget_percentage_suffix
         )
-        views.setTextColor(R.id.widget_status_pill, accent)
-        views.setInt(R.id.widget_status_pill, "setBackgroundResource", pillBg)
-
-        // Main stats
-        views.setTextViewText(
-            R.id.widget_percentage,
-            if (data.isSyncing) "—" else formatPercentage(data.overallPercentage)
-        )
-        views.setTextColor(R.id.widget_percentage, if (data.isSyncing) accent else pctColor)
         views.setTextViewText(
             R.id.widget_classes,
-            if (data.isSyncing) "— / —" else "${data.attended} / ${data.conducted}"
-        )
-
-        // Today-row hint — doubles as the tap-to-refresh confirmation.
-        // Keep the idle text short: it shares the row with today's subject chips.
-        views.setTextViewText(
-            R.id.widget_refresh_hint,
-            flash?.text ?: "tap ↻"
+            if (hasSnapshot) "${data.attended} / ${data.conducted}" else "— / —"
         )
         views.setTextColor(
-            R.id.widget_refresh_hint,
+            R.id.widget_classes,
+            context.getColor(if (hasSnapshot) R.color.text_secondary else R.color.text_muted)
+        )
+
+        // Progress rail. The four bars share one value and swap visibility so the
+        // fill can change colour without a custom RemoteViews action.
+        bindProgress(
+            context = context,
+            views = views,
+            data = data,
+            barIds = intArrayOf(
+                R.id.widget_progress_safe,
+                R.id.widget_progress_warning,
+                R.id.widget_progress_danger,
+                R.id.widget_progress_neutral
+            )
+        )
+
+        // The refresh affordance stays constant; the detail line carries feedback.
+        views.setTextViewText(R.id.widget_refresh_hint, "↻")
+        views.setTextColor(R.id.widget_refresh_hint, context.getColor(R.color.text_muted))
+
+        views.setContentDescription(
+            R.id.widget_container,
+            if (hasSnapshot) {
+                "Attendance ${formatPercentage(data.overallPercentage)}, " +
+                    "${data.attended} of ${data.conducted} classes attended. Tap to refresh."
+            } else {
+                "Attendance is syncing. Tap to refresh."
+            }
+        )
+
+        // Today chips
+        bindTodayChips(context, views, data)
+    }
+
+    /** Identity + SAFE/BORDER/CRITICAL verdict, shared by both widget layouts. */
+    private fun bindStatusHeader(
+        context: Context,
+        views: RemoteViews,
+        data: WidgetData,
+        flash: WidgetFlash?,
+        nameId: Int,
+        rollId: Int,
+        pillId: Int,
+        detailId: Int
+    ) {
+        val hasSnapshot = data.conducted > 0
+        val badge = statusBadge(context, data)
+
+        views.setTextViewText(
+            nameId,
+            titleCaseName(data.studentName).ifBlank { "Student" }
+        )
+        views.setTextViewText(rollId, data.rollNumber.ifBlank { "—" })
+
+        views.setTextViewText(pillId, badge.text)
+        views.setTextColor(pillId, badge.color)
+        views.setInt(pillId, "setBackgroundResource", badge.background)
+
+        // The line under the badge carries the number behind the verdict — how
+        // many periods are still safe to skip, or classes needed to recover.
+        // After a tap it doubles as the refresh confirmation.
+        views.setTextViewText(detailId, flash?.text ?: statusDetail(data, hasSnapshot))
+        views.setTextColor(
+            detailId,
             context.getColor(
                 when {
                     flash == null -> R.color.text_muted
@@ -328,9 +379,6 @@ object WidgetUpdater {
                 }
             )
         )
-
-        // Today chips
-        bindTodayChips(context, views, data, accent)
     }
 
     /** Per-subject today chips (up to 3 + "…+N" overflow) or a fallback message. */
@@ -338,43 +386,41 @@ object WidgetUpdater {
         context: Context,
         views: RemoteViews,
         data: WidgetData,
-        accent: Int
+        chipIds: IntArray = intArrayOf(
+            R.id.widget_chip_1,
+            R.id.widget_chip_2,
+            R.id.widget_chip_3
+        ),
+        moreId: Int = R.id.widget_chip_more,
+        messageId: Int = R.id.widget_today_message
     ) {
-        val chipIds = intArrayOf(R.id.widget_chip_1, R.id.widget_chip_2, R.id.widget_chip_3)
-        val safeBg = R.drawable.status_background_safe
-        val dangerBg = R.drawable.status_background_danger
-
-        if (data.isSyncing || data.todayChips.isEmpty()) {
+        if (data.todayChips.isEmpty()) {
             chipIds.forEach { views.setViewVisibility(it, View.GONE) }
-            views.setViewVisibility(R.id.widget_chip_more, View.GONE)
+            views.setViewVisibility(moreId, View.GONE)
             views.setTextViewText(
-                R.id.widget_today_message,
+                messageId,
                 when {
-                    data.isSyncing -> "fetching today's status…"
-                    data.todayNoClasses -> "no classes yet"
-                    data.todayNoRecords -> "no attendance recorded yet"
-                    else -> "no classes yet"
+                    data.isSyncing -> "fetching today…"
+                    data.todayNoClasses -> "no classes logged yet"
+                    data.todayNoRecords -> "no subject marks yet"
+                    else -> "no classes today"
                 }
             )
-            views.setTextColor(R.id.widget_today_message, context.getColor(R.color.text_muted))
+            views.setTextColor(messageId, context.getColor(R.color.text_muted))
             // Previous renders may have hidden the message row (chips were shown) —
             // always restore visibility explicitly; RemoteViews state persists.
-            views.setViewVisibility(R.id.widget_today_message, View.VISIBLE)
+            views.setViewVisibility(messageId, View.VISIBLE)
             return
         }
 
-        views.setViewVisibility(R.id.widget_today_message, View.GONE)
+        views.setViewVisibility(messageId, View.GONE)
 
         data.todayChips.take(chipIds.size).forEachIndexed { index, chip ->
-            val wasAbsent = chip.status.uppercase().contains('A')
             views.setViewVisibility(chipIds[index], View.VISIBLE)
-            views.setTextViewText(chipIds[index], "${chip.subject} ${chip.status}")
-            views.setTextColor(chipIds[index], accent)
-            views.setInt(
-                chipIds[index],
-                "setBackgroundResource",
-                if (wasAbsent) dangerBg else safeBg
-            )
+            views.setTextViewText(chipIds[index], chip.label)
+            views.setTextColor(chipIds[index], context.getColor(chipColorRes(chip.tone)))
+            views.setInt(chipIds[index], "setBackgroundResource", chipBackgroundRes(chip.tone))
+            views.setContentDescription(chipIds[index], chip.contentDescription)
         }
         // Hide any unused chip slots.
         for (i in data.todayChips.size until chipIds.size) {
@@ -384,11 +430,143 @@ object WidgetUpdater {
         // Overflow: "+N" chip when more subjects than slots.
         val overflow = data.todayChips.size - chipIds.size
         if (overflow > 0) {
-            views.setViewVisibility(R.id.widget_chip_more, View.VISIBLE)
-            views.setTextViewText(R.id.widget_chip_more, "+$overflow")
-            views.setTextColor(R.id.widget_chip_more, context.getColor(R.color.text_muted))
+            views.setViewVisibility(moreId, View.VISIBLE)
+            views.setTextViewText(moreId, "+$overflow")
+            views.setTextColor(moreId, context.getColor(R.color.text_muted))
+            views.setContentDescription(moreId, "$overflow more subjects")
         } else {
-            views.setViewVisibility(R.id.widget_chip_more, View.GONE)
+            views.setViewVisibility(moreId, View.GONE)
+        }
+    }
+
+    /** "NAVEEN KUMAR" / "naveen kumar" → "Naveen Kumar". */
+    private fun titleCaseName(raw: String): String =
+        raw.trim().split(Regex("\\s+")).joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { it.titlecase() }
+        }
+
+    private data class WidgetBadge(
+        val text: String,
+        val color: Int,
+        val background: Int
+    )
+
+    /** SAFE ≥ 80%, BORDER 75–80%, CRITICAL below target. */
+    private fun statusBadge(context: Context, data: WidgetData): WidgetBadge {
+        if (data.isSyncing || data.conducted <= 0) {
+            return WidgetBadge(
+                text = "SYNCING",
+                color = context.getColor(R.color.text_muted),
+                background = R.drawable.status_background_neutral
+            )
+        }
+        return when {
+            data.overallPercentage >= 80.0 -> WidgetBadge(
+                "SAFE",
+                context.getColor(R.color.safe_emerald),
+                R.drawable.status_background_safe
+            )
+            data.overallPercentage >= 75.0 -> WidgetBadge(
+                "BORDER",
+                context.getColor(R.color.warning_amber),
+                R.drawable.status_background_warning
+            )
+            else -> WidgetBadge(
+                "CRITICAL",
+                context.getColor(R.color.danger_rose),
+                R.drawable.status_background_danger
+            )
+        }
+    }
+
+    /** The line under the badge: what the verdict means in practice. */
+    private fun statusDetail(data: WidgetData, hasSnapshot: Boolean): String {
+        if (data.isSyncing) return if (hasSnapshot) "updating…" else "connecting…"
+        if (!hasSnapshot) return "no classes yet"
+
+        if (data.overallPercentage >= 75.0 && data.safeSkipPeriods > 0) {
+            return "${data.safeSkipPeriods} period${if (data.safeSkipPeriods == 1) "" else "s"} to skip"
+        }
+        if (data.classesNeededToRecover > 0) {
+            return "need ${data.classesNeededToRecover} class" +
+                if (data.classesNeededToRecover == 1) "" else "es"
+        }
+        if (data.overallPercentage >= 75.0) return "no skips left"
+        return "below target"
+    }
+
+    private fun chipColorRes(tone: WidgetChipTone): Int = when (tone) {
+        WidgetChipTone.SAFE -> R.color.safe_emerald
+        WidgetChipTone.WARNING -> R.color.warning_amber
+        WidgetChipTone.DANGER -> R.color.danger_rose
+        WidgetChipTone.NEUTRAL -> R.color.text_muted
+    }
+
+    private fun chipBackgroundRes(tone: WidgetChipTone): Int = when (tone) {
+        WidgetChipTone.SAFE -> R.drawable.status_background_safe
+        WidgetChipTone.WARNING -> R.drawable.status_background_warning
+        WidgetChipTone.DANGER -> R.drawable.status_background_danger
+        WidgetChipTone.NEUTRAL -> R.drawable.status_background_neutral
+    }
+
+    /**
+     * Split the hero percentage across three TextViews: white integer, verdict-
+     * coloured fraction, muted percent sign. Both widget layouts share it.
+     */
+    private fun bindPercentage(
+        context: Context,
+        views: RemoteViews,
+        data: WidgetData,
+        numberId: Int,
+        fractionId: Int,
+        suffixId: Int
+    ) {
+        val hasSnapshot = data.conducted > 0
+        if (hasSnapshot) {
+            val raw = formatPercentage(data.overallPercentage).removeSuffix("%")
+            val fraction = if ('.' in raw) ".${raw.substringAfter('.')}" else ""
+            views.setTextViewText(numberId, raw.substringBefore('.'))
+            views.setTextViewText(fractionId, fraction)
+            views.setViewVisibility(
+                fractionId,
+                if (fraction.isEmpty()) View.GONE else View.VISIBLE
+            )
+            views.setTextViewText(suffixId, "%")
+            views.setViewVisibility(suffixId, View.VISIBLE)
+        } else {
+            views.setTextViewText(numberId, "—")
+            views.setViewVisibility(fractionId, View.GONE)
+            views.setViewVisibility(suffixId, View.GONE)
+        }
+        views.setTextColor(
+            numberId,
+            context.getColor(if (hasSnapshot) R.color.text_primary else R.color.text_muted)
+        )
+        views.setTextColor(fractionId, statusColor(context, data.overallPercentage))
+        views.setTextColor(suffixId, context.getColor(R.color.text_muted))
+    }
+
+    /**
+     * Swap one of four pre-coloured bars into view. [barIds] order must be
+     * safe, warning, danger, neutral.
+     */
+    private fun bindProgress(
+        context: Context,
+        views: RemoteViews,
+        data: WidgetData,
+        barIds: IntArray
+    ) {
+        val hasSnapshot = data.conducted > 0
+        val progress = data.overallPercentage.roundToInt().coerceIn(0, 100)
+        val active = when {
+            data.isSyncing || !hasSnapshot -> barIds.last()
+            data.overallPercentage >= 80.0 -> barIds[0]
+            data.overallPercentage >= 75.0 -> barIds[1]
+            else -> barIds[2]
+        }
+        barIds.forEach { id ->
+            views.setProgressBar(id, 100, progress, false)
+            views.setViewVisibility(id, if (id == active) View.VISIBLE else View.GONE)
         }
     }
 
@@ -405,16 +583,47 @@ object WidgetUpdater {
     }
 }
 
+/** How a subject's chip should read at a glance. */
+internal enum class WidgetChipTone { SAFE, WARNING, DANGER, NEUTRAL }
+
 /** One per-subject chip for today's attendance row. */
 internal data class WidgetTodayChip(
     val subject: String,
-    val status: String
-)
+    val present: Int,
+    val absent: Int
+) {
+    /** "3P", "2A", "1P 1A". */
+    val countLabel: String
+        get() = when {
+            present > 0 && absent > 0 -> "${present}P ${absent}A"
+            present > 0 -> "${present}P"
+            absent > 0 -> "${absent}A"
+            else -> "—"
+        }
 
-/** Transient footer confirmation shown in the widget after a tap-to-refresh. */
+    /** "DL & CO 3P", "DBMS 2A", "MATH 1P 1A". */
+    val label: String get() = "$subject $countLabel"
+
+    val tone: WidgetChipTone
+        get() = when {
+            present > 0 && absent == 0 -> WidgetChipTone.SAFE
+            absent > 0 && present == 0 -> WidgetChipTone.DANGER
+            present > 0 && absent > 0 -> WidgetChipTone.WARNING
+            else -> WidgetChipTone.NEUTRAL
+        }
+
+    val contentDescription: String
+        get() = buildString {
+            append(subject)
+            if (present > 0) append(", $present present")
+            if (absent > 0) append(", $absent absent")
+        }
+}
+
+/** Transient status-line confirmation shown in the widget after a tap-to-refresh. */
 internal data class WidgetFlash(val text: String, val ok: Boolean)
 
-/** Everything a tap-to-refresh produces: new snapshot, toast text, widget footer text. */
+/** Everything a tap-to-refresh produces: new snapshot, toast text, status-line text. */
 private data class WidgetRefreshOutcome(
     val data: WidgetData,
     val toast: String,
@@ -428,7 +637,10 @@ internal data class WidgetData(
     val overallPercentage: Double = 0.0,
     val attended: Int = 0,
     val conducted: Int = 0,
-    val canSkip: Boolean = false,
+    /** Periods still safe to skip without falling under the target. */
+    val safeSkipPeriods: Int = 0,
+    /** Classes needed to climb back over the target when attendance is short. */
+    val classesNeededToRecover: Int = 0,
     val todayChips: List<WidgetTodayChip> = emptyList(),
     /** No register entry for today at all — there are no classes logged yet. */
     val todayNoClasses: Boolean = false,
@@ -454,10 +666,15 @@ internal data class WidgetData(
             val todayEntry = entries.firstOrNull { isSameCalendarDay(it.date, nowMs) }
                 ?: entries.lastOrNull { parseLooseDate(it.date) == null }
             val chips = todayEntry?.badges.orEmpty().map { badge ->
+                // Prefer the portal's explicit counts; fall back to the P/A run
+                // when an older payload leaves them at zero.
+                val run = badge.status.uppercase().replace(" ", "")
                 WidgetTodayChip(
                     subject = shortSubjectCode(badge.subject),
-                    // Portal tokens are P/A runs ("PP", "AA"…) — show as-is.
-                    status = badge.status.uppercase().replace(" ", "")
+                    present = badge.presentCount.takeIf { it > 0 }
+                        ?: run.count { it == 'P' },
+                    absent = badge.absentCount.takeIf { it > 0 }
+                        ?: run.count { it == 'A' }
                 )
             }
 
@@ -467,16 +684,24 @@ internal data class WidgetData(
                 overallPercentage = aggregate.percentage,
                 attended = aggregate.attended,
                 conducted = aggregate.held,
-                canSkip = skips.status.equals("Safe", ignoreCase = true),
+                safeSkipPeriods = skips.periods,
+                classesNeededToRecover = skips.classesNeededToRecover,
                 todayChips = chips,
                 todayNoClasses = todayEntry == null,
                 todayNoRecords = todayEntry != null && todayEntry.badges.isEmpty()
             )
         }
 
-        /** "DL & CO - Object Oriented Programming" → "DL & CO". */
+        /**
+         * "DL & CO - Object Oriented Programming" → "DL & CO",
+         * "CS301-Operating Systems" → "CS301".
+         */
         private fun shortSubjectCode(raw: String): String =
-            raw.split(" - ").first().trim().uppercase().ifBlank { "SUB" }
+            raw.substringBefore(" - ")
+                .substringBefore('-')
+                .trim()
+                .uppercase()
+                .ifBlank { "SUB" }
 
         private fun isSameCalendarDay(raw: String?, nowMs: Long): Boolean {
             val epoch = parseLooseDate(raw) ?: return false
