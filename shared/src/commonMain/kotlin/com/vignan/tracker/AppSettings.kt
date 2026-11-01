@@ -29,6 +29,14 @@ object AppSettings {
         private set
 
     /**
+     * Attendance target the user is trying to stay above. Read by the status
+     * helper, projection math and the widget; persisted so a cold start keeps
+     * the same threshold.
+     */
+    var targetPct by mutableStateOf(DEFAULT_TARGET_PCT)
+        private set
+
+    /**
      * Whether Sunday counts as a normal class day. Off by default: the college
      * usually shuts on Sundays, and the projection/picker grey the day out. On,
      * Sunday follows its timetable row and can be planned like any weekday.
@@ -84,6 +92,7 @@ object AppSettings {
         registerTotalsPinned = store.getRegisterTotalsPinned() ?: false
         store.getMotionEnabled()?.let { motionEnabled = it }
         store.getSundayClassesEnabled()?.let { sundayClassesEnabled = it }
+        store.getTargetPct()?.let { targetPct = normalizeTargetPct(it) }
         // Only overwrite when something was actually saved: primeThemeMode may
         // already have restored the values, and the async read must not undo
         // them on the way up.
@@ -124,6 +133,15 @@ object AppSettings {
     ) {
         sundayClassesEnabled = enabled
         store.saveSundayClassesEnabled(enabled)
+    }
+
+    suspend fun setTargetPct(
+        percentage: Double,
+        store: CredentialStore = getCredentialStore()
+    ) {
+        val normalized = normalizeTargetPct(percentage)
+        targetPct = normalized
+        store.saveTargetPct(normalized)
     }
 
     /**

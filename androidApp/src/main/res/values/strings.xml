@@ -6,8 +6,6 @@
     <string name="widget_description">Attendance percentage, skippable periods, and today\'s subject status — tap to refresh</string>
     <string name="widget_refresh_action">Refresh attendance</string>
 
-    <!-- Status labels -->
-    <string name="status_safe">SAFE</string>
-    <string name="status_critical">CRITICAL</string>
-    <string name="status_syncing">SYNCING</string>
+    <!-- Status labels live in the shared AttendanceStatus enum so the app and
+         widget cannot drift; nothing here needs a duplicate copy. -->
 </resources>

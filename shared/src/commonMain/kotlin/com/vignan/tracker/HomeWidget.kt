@@ -142,11 +142,10 @@ fun Widget4x2(
                         )
                     } else {
                         val percentage = data?.overallPercentage ?: 0.0
-                        val statusColor = when {
-                            !hasData -> TrackerColors.TextMuted
-                            percentage >= 80.0 -> TrackerColors.SafeEmerald
-                            percentage >= 75.0 -> TrackerColors.WarningAmber
-                            else -> TrackerColors.DangerRose
+                        val statusColor = if (hasData) {
+                            attendanceStatus(percentage).color
+                        } else {
+                            TrackerColors.TextMuted
                         }
                         
                         Row(verticalAlignment = Alignment.Bottom) {
@@ -351,11 +350,10 @@ fun Widget3x2(
                     )
                 } else {
                     val percentage = data?.overallPercentage ?: 0.0
-                    val statusColor = when {
-                        !hasData -> TrackerColors.TextMuted
-                        percentage >= 80.0 -> TrackerColors.SafeEmerald
-                        percentage >= 75.0 -> TrackerColors.WarningAmber
-                        else -> TrackerColors.DangerRose
+                    val statusColor = if (hasData) {
+                        attendanceStatus(percentage).color
+                    } else {
+                        TrackerColors.TextMuted
                     }
                     
                     Column {
@@ -387,10 +385,10 @@ fun Widget3x2(
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Text(
-                                text = when {
-                                    !hasData -> "SYNC"
-                                    percentage >= 75.0 -> "SAFE"
-                                    else -> "LOW"
+                                text = if (hasData) {
+                                    attendanceStatus(percentage).label
+                                } else {
+                                    "SYNC"
                                 },
                                 color = statusColor,
                                 fontSize = 7.sp,
@@ -526,11 +524,8 @@ private fun AttendanceStatusIndicator(
     modifier: Modifier = Modifier
 ) {
     val statusColor = when {
-        isLoading -> TrackerColors.TextMuted
-        percentage == null -> TrackerColors.TextMuted
-        percentage >= 80.0 -> TrackerColors.SafeEmerald
-        percentage >= 75.0 -> TrackerColors.WarningAmber
-        else -> TrackerColors.DangerRose
+        isLoading || percentage == null -> TrackerColors.TextMuted
+        else -> attendanceStatus(percentage).color
     }
     
     Box(

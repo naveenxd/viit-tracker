@@ -49,7 +49,7 @@ import kotlin.math.roundToInt
 /**
  * "Attendance as per data" projection: for today and each of the next N−1 days, what the
  * overall attendance WILL be at the end of that day if scheduled classes are attended,
- * plus the skippable buffer to stay above 75%.
+ * plus the skippable buffer to stay above the configured target.
  *
  * Sundays and days the user marked as holidays are present but greyed out. Supports
  * simulated absences cascading forward.
@@ -194,9 +194,22 @@ internal fun projectionDateKey(millis: Long): String =
     java.text.SimpleDateFormat(PROJECTION_DATE_PATTERN, java.util.Locale.US)
         .format(java.util.Date(millis))
 
-/** (4·a − 3·h) / 3, floored, never negative — buffer to stay exactly at 75%. */
-private fun skippablePeriods(attended: Int, held: Int): Int =
-    ((4 * attended - 3 * held) / 3).coerceAtLeast(0)
+/**
+ * Periods that can still be missed while staying at or above [targetPct].
+ *
+ * `attended / (held + k) >= target / 100` solved for k, floored. At 75% this
+ * is the old `(4·a − 3·h) / 3`; at 80% it becomes `(5·a − 4·h) / 4`.
+ */
+internal fun skippablePeriods(
+    attended: Int,
+    held: Int,
+    targetPct: Double = AppSettings.targetPct
+): Int {
+    val target = normalizeTargetPct(targetPct)
+    return kotlin.math.floor(attended * 100.0 / target - held)
+        .toInt()
+        .coerceAtLeast(0)
+}
 
 /** Calendar.DAY_OF_WEEK (1=Sun..7=Sat) → weekly-map index (0=Sun..6=Sat). */
 private fun dayMapIndex(cal: java.util.Calendar): Int = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
@@ -394,10 +407,12 @@ fun buildAttendanceProjection(
     absentDates: Set<String> = emptySet(),
     holidayDates: Set<String> = emptySet(),
     bunkedPeriodsToday: Set<Int> = emptySet(),
-    nowMillis: Long = System.currentTimeMillis()
+    nowMillis: Long = System.currentTimeMillis(),
+    targetPct: Double = AppSettings.targetPct
 ): List<ProjectionRow> {
     val agg = live.profile.aggregate
     if (agg.held <= 0) return emptyList()
+    val target = normalizeTargetPct(targetPct)
 
     val weekly = buildWeeklyTimetable(live.attendance.timetable, live.attendance.faculty)
     val cal = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
@@ -423,7 +438,7 @@ fun buildAttendanceProjection(
             attended = attended,
             held = held,
             percentage = if (held > 0) attended * 100.0 / held else 0.0,
-            skippable = skippablePeriods(attended, held),
+            skippable = skippablePeriods(attended, held, target),
             isAbsent = false
         )
     } else {
@@ -453,7 +468,7 @@ fun buildAttendanceProjection(
             attended = attended,
             held = held,
             percentage = if (held > 0) attended * 100.0 / held else 0.0,
-            skippable = skippablePeriods(attended, held),
+            skippable = skippablePeriods(attended, held, target),
             isAbsent = isTodayAbsent,
             bunkedPeriods = todayBunks
         )
@@ -480,7 +495,7 @@ fun buildAttendanceProjection(
                 attended = attended,
                 held = held,
                 percentage = if (held > 0) attended * 100.0 / held else 0.0,
-                skippable = skippablePeriods(attended, held),
+                skippable = skippablePeriods(attended, held, target),
                 isAbsent = false
             )
         } else {
@@ -504,7 +519,7 @@ fun buildAttendanceProjection(
                 attended = attended,
                 held = held,
                 percentage = if (held > 0) attended * 100.0 / held else 0.0,
-                skippable = skippablePeriods(attended, held),
+                skippable = skippablePeriods(attended, held, target),
                 isAbsent = isAbsent
             )
         }
@@ -543,9 +558,25 @@ fun ProjectionCard(
         }
     }
 
-    val rows = remember(liveResponse, range, absentDates, holidayDates, bunkedPeriodsToday, dayStamp) {
+    val targetPct = AppSettings.targetPct
+    val rows = remember(
+        liveResponse,
+        range,
+        absentDates,
+        holidayDates,
+        bunkedPeriodsToday,
+        dayStamp,
+        targetPct
+    ) {
         liveResponse?.let {
-            buildAttendanceProjection(it, range, absentDates, holidayDates, bunkedPeriodsToday)
+            buildAttendanceProjection(
+                it,
+                range,
+                absentDates,
+                holidayDates,
+                bunkedPeriodsToday,
+                targetPct = targetPct
+            )
         } ?: emptyList()
     }
 
@@ -849,13 +880,10 @@ private fun ProjectionLine(
         else -> Color.Transparent
     }
 
-    // High contrast threshold: always green for >= 75%
     val pctColor = when {
         row.isOffDay -> TrackerColors.TextSubtle
         row.isAbsent -> TrackerColors.DangerRose
-        row.percentage >= 75.0 -> TrackerColors.SafeEmerald
-        row.percentage >= 70.0 -> TrackerColors.WarningAmber
-        else -> TrackerColors.DangerRose
+        else -> attendanceStatus(row.percentage).color
     }
 
     // Sundays are certainly off, so they recede furthest. A marked holiday is the

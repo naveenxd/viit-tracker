@@ -16,7 +16,7 @@ data class KvConfigResponse(
 data class LiveAttendanceRequest(
     val rollNo: String,
     val password: String,
-    val targetPct: Double = 75.0,
+    val targetPct: Double = DEFAULT_TARGET_PCT,
 )
 
 @Serializable
@@ -31,7 +31,7 @@ data class SimulateBunkRequest(
     val currentHeld: Int,
     val selectedPeriodsToday: List<Int>,
     val fullDaysLeave: Int = 0,
-    val targetPct: Double = 75.0,
+    val targetPct: Double = DEFAULT_TARGET_PCT,
 )
 
 // ---- responses ----

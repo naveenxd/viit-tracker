@@ -14,6 +14,10 @@ interface CredentialStore {
     suspend fun getCachedAttendance(): String?
     suspend fun saveCachedAttendance(json: String)
 
+    /** Attendance target percentage, null when the user has never chosen one. */
+    suspend fun getTargetPct(): Double?
+    suspend fun saveTargetPct(percentage: Double)
+
     /** Resolved worker base URL, persisted to skip the KV lookup on cold starts. */
     suspend fun getApiBaseUrl(): String?
     suspend fun saveApiBaseUrl(url: String)

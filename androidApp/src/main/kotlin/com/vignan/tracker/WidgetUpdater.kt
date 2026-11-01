@@ -341,7 +341,7 @@ object WidgetUpdater {
         bindTodayChips(context, views, data)
     }
 
-    /** Identity + SAFE/BORDER/CRITICAL verdict, shared by both widget layouts. */
+    /** Identity + SAFE/BORDER/DANGER verdict, shared by both widget layouts. */
     private fun bindStatusHeader(
         context: Context,
         views: RemoteViews,
@@ -451,7 +451,19 @@ object WidgetUpdater {
         val background: Int
     )
 
-    /** SAFE ≥ 80%, BORDER 75–80%, CRITICAL below target. */
+    private fun AttendanceStatus.colorRes(): Int = when (this) {
+        AttendanceStatus.SAFE -> R.color.safe_emerald
+        AttendanceStatus.BORDER -> R.color.warning_amber
+        AttendanceStatus.DANGER -> R.color.danger_rose
+    }
+
+    private fun AttendanceStatus.backgroundRes(): Int = when (this) {
+        AttendanceStatus.SAFE -> R.drawable.status_background_safe
+        AttendanceStatus.BORDER -> R.drawable.status_background_warning
+        AttendanceStatus.DANGER -> R.drawable.status_background_danger
+    }
+
+    /** Same SAFE / BORDER / DANGER verdict the app uses. */
     private fun statusBadge(context: Context, data: WidgetData): WidgetBadge {
         if (data.isSyncing || data.conducted <= 0) {
             return WidgetBadge(
@@ -460,23 +472,12 @@ object WidgetUpdater {
                 background = R.drawable.status_background_neutral
             )
         }
-        return when {
-            data.overallPercentage >= 80.0 -> WidgetBadge(
-                "SAFE",
-                context.getColor(R.color.safe_emerald),
-                R.drawable.status_background_safe
-            )
-            data.overallPercentage >= 75.0 -> WidgetBadge(
-                "BORDER",
-                context.getColor(R.color.warning_amber),
-                R.drawable.status_background_warning
-            )
-            else -> WidgetBadge(
-                "CRITICAL",
-                context.getColor(R.color.danger_rose),
-                R.drawable.status_background_danger
-            )
-        }
+        val status = attendanceStatus(data.overallPercentage, data.targetPct)
+        return WidgetBadge(
+            text = status.label,
+            color = context.getColor(status.colorRes()),
+            background = status.backgroundRes()
+        )
     }
 
     /** The line under the badge: what the verdict means in practice. */
@@ -484,14 +485,14 @@ object WidgetUpdater {
         if (data.isSyncing) return if (hasSnapshot) "updating…" else "connecting…"
         if (!hasSnapshot) return "no classes yet"
 
-        if (data.overallPercentage >= 75.0 && data.safeSkipPeriods > 0) {
+        if (data.overallPercentage >= data.targetPct && data.safeSkipPeriods > 0) {
             return "${data.safeSkipPeriods} period${if (data.safeSkipPeriods == 1) "" else "s"} to skip"
         }
         if (data.classesNeededToRecover > 0) {
             return "need ${data.classesNeededToRecover} class" +
                 if (data.classesNeededToRecover == 1) "" else "es"
         }
-        if (data.overallPercentage >= 75.0) return "no skips left"
+        if (data.overallPercentage >= data.targetPct) return "no skips left"
         return "below target"
     }
 
@@ -542,7 +543,10 @@ object WidgetUpdater {
             numberId,
             context.getColor(if (hasSnapshot) R.color.text_primary else R.color.text_muted)
         )
-        views.setTextColor(fractionId, statusColor(context, data.overallPercentage))
+        views.setTextColor(
+            fractionId,
+            statusColor(context, data.overallPercentage, data.targetPct)
+        )
         views.setTextColor(suffixId, context.getColor(R.color.text_muted))
     }
 
@@ -560,9 +564,11 @@ object WidgetUpdater {
         val progress = data.overallPercentage.roundToInt().coerceIn(0, 100)
         val active = when {
             data.isSyncing || !hasSnapshot -> barIds.last()
-            data.overallPercentage >= 80.0 -> barIds[0]
-            data.overallPercentage >= 75.0 -> barIds[1]
-            else -> barIds[2]
+            else -> when (attendanceStatus(data.overallPercentage, data.targetPct)) {
+                AttendanceStatus.SAFE -> barIds[0]
+                AttendanceStatus.BORDER -> barIds[1]
+                AttendanceStatus.DANGER -> barIds[2]
+            }
         }
         barIds.forEach { id ->
             views.setProgressBar(id, 100, progress, false)
@@ -570,11 +576,13 @@ object WidgetUpdater {
         }
     }
 
-    private fun statusColor(context: Context, percentage: Double): Int = when {
-        percentage >= 80.0 -> context.getColor(R.color.safe_emerald)
-        percentage >= 75.0 -> context.getColor(R.color.warning_amber)
-        else -> context.getColor(R.color.danger_rose)
-    }
+    private fun statusColor(
+        context: Context,
+        percentage: Double,
+        targetPct: Double
+    ): Int = context.getColor(
+        attendanceStatus(percentage, targetPct).colorRes()
+    )
 
     private suspend fun toast(context: Context, message: String) {
         withContext(Dispatchers.Main) {
@@ -637,6 +645,8 @@ internal data class WidgetData(
     val overallPercentage: Double = 0.0,
     val attended: Int = 0,
     val conducted: Int = 0,
+    /** Target used by the fetch that produced this snapshot. */
+    val targetPct: Double = DEFAULT_TARGET_PCT,
     /** Periods still safe to skip without falling under the target. */
     val safeSkipPeriods: Int = 0,
     /** Classes needed to climb back over the target when attendance is short. */
@@ -684,6 +694,7 @@ internal data class WidgetData(
                 overallPercentage = aggregate.percentage,
                 attended = aggregate.attended,
                 conducted = aggregate.held,
+                targetPct = normalizeTargetPct(response.intelligence.targetPct),
                 safeSkipPeriods = skips.periods,
                 classesNeededToRecover = skips.classesNeededToRecover,
                 todayChips = chips,

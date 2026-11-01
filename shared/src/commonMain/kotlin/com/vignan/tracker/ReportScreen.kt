@@ -680,18 +680,12 @@ private fun ReportLoadButton(
 
 // ---------------------------------------------------------------- results
 
-/** Status thresholds shared by the hero and the subject rows. */
-private fun statusColor(percentage: Double): Color = when {
-    percentage >= 80.0 -> TrackerColors.SafeEmerald
-    percentage >= 75.0 -> TrackerColors.WarningAmber
-    else -> TrackerColors.DangerRose
-}
+/** Canonical status, shared by the hero and the subject rows. */
+private fun statusColor(percentage: Double): Color =
+    attendanceStatus(percentage, AppSettings.targetPct).color
 
-private fun statusLabel(percentage: Double): String = when {
-    percentage >= 80.0 -> "SAFE"
-    percentage >= 75.0 -> "BORDERLINE"
-    else -> "DANGER"
-}
+private fun statusLabel(percentage: Double): String =
+    attendanceStatus(percentage, AppSettings.targetPct).label
 
 /** Thin rounded progress bar, animated into place. */
 @Composable

@@ -12,6 +12,7 @@ object AppContextProvider {
 class AndroidCredentialStore(private val contextProvider: () -> Context?) : CredentialStore {
     private var inMemoryCreds: StoredCredentials? = null
     private var inMemoryCache: String? = null
+    private var inMemoryTargetPct: Double? = null
 
     // EncryptedSharedPreferences creation runs master-key crypto — expensive.
     // Build once and reuse; rebuilding per call was a measurable cold-start cost.
@@ -59,6 +60,7 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
     override suspend fun clear() {
         inMemoryCreds = null
         inMemoryCache = null
+        inMemoryTargetPct = null
         val prefs = getPrefs() ?: return
         prefs.edit().clear().apply()
     }
@@ -72,6 +74,22 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         inMemoryCache = json
         val prefs = getPrefs() ?: return
         prefs.edit().putString("cached_attendance_json", json).apply()
+    }
+
+    override suspend fun getTargetPct(): Double? {
+        // A display preference, not a credential: keep it in UI prefs so
+        // logging out does not reset it (clear() only wipes the secure file).
+        val prefs = contextProvider()
+            ?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?: return inMemoryTargetPct
+        return prefs.getString("target_pct", null)?.toDoubleOrNull() ?: inMemoryTargetPct
+    }
+
+    override suspend fun saveTargetPct(percentage: Double) {
+        inMemoryTargetPct = percentage
+        contextProvider()
+            ?.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE)
+            ?.edit()?.putString("target_pct", percentage.toString())?.apply()
     }
 
     override suspend fun getApiBaseUrl(): String? {
@@ -199,8 +217,7 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
 
     private companion object {
         /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
-        const val UI_PREFS = "viit_ui_prefs"
-    }
+        const val UI_PREFS = "viit_ui_prefs"    }
 }
 
 private val androidStore = AndroidCredentialStore { AppContextProvider.context }

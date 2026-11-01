@@ -59,7 +59,7 @@ class AttendanceRepository(
         rollNo: String? = null,
         password: String? = null,
         rememberMe: Boolean = true,
-        targetPct: Double = 75.0,
+        targetPct: Double? = null,
         currentTimeMs: Long = System.currentTimeMillis(),
         source: AttendanceSnapshotSource = AttendanceSnapshotSource.APP
     ): Result<LiveAttendanceResponse> = fetchMutex.withLock {
@@ -70,9 +70,16 @@ class AttendanceRepository(
         } else {
             store.load() ?: return@withLock Result.failure(IllegalStateException("Not logged in"))
         }
+        // Read the target from the store when the caller did not pin one. This
+        // keeps widget refreshes correct even in a fresh process where the
+        // in-memory AppSettings object has not been loaded yet.
+        val effectiveTarget = normalizeTargetPct(targetPct ?: store.getTargetPct())
 
         try {
-            val response = api.liveAttendance(CredentialsRequest(creds.rollNo, creds.password), targetPct)
+            val response = api.liveAttendance(
+                CredentialsRequest(creds.rollNo, creds.password),
+                effectiveTarget
+            )
             // Save valid credentials & publish the one shared snapshot. Publishing
             // persists the cache and wakes the other surface.
             store.save(creds.copy(lastLoginTimestamp = currentTimeMs))

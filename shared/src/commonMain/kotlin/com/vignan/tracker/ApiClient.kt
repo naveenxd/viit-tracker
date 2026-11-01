@@ -195,7 +195,10 @@ class ApiClient(
             .getOrElse { throw ApiError.ServiceUnavailable("Malformed response from server") }
 
     /** Full attendance payload — the main call. */
-    suspend fun liveAttendance(creds: CredentialsRequest, targetPct: Double = 75.0): LiveAttendanceResponse {
+    suspend fun liveAttendance(
+        creds: CredentialsRequest,
+        targetPct: Double = DEFAULT_TARGET_PCT
+    ): LiveAttendanceResponse {
         val body = AppJson.encodeToString(
             LiveAttendanceRequest.serializer(),
             LiveAttendanceRequest(creds.rollNo, creds.password, targetPct)

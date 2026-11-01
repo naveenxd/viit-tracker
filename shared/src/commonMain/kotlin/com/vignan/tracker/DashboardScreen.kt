@@ -316,6 +316,7 @@ fun DashboardScreen(
                         showSettings = false
                         onLogout()
                     },
+                    onTargetChanged = onFetchClick,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -329,11 +330,14 @@ fun DashboardScreen(
  * Attendance verdict colour shared by the header's status pill and the hero
  * percentage block, so one value can never drift from the other.
  */
-internal fun attendanceStatusColor(hasData: Boolean, overallPercentage: Double): Color = when {
-    !hasData -> TrackerColors.TextMuted
-    overallPercentage >= 80.0 -> TrackerColors.SafeEmerald
-    overallPercentage >= 75.0 -> TrackerColors.WarningAmber
-    else -> TrackerColors.DangerRose
+internal fun attendanceStatusColor(
+    hasData: Boolean,
+    overallPercentage: Double,
+    targetPct: Double = AppSettings.targetPct
+): Color = if (!hasData) {
+    TrackerColors.TextMuted
+} else {
+    attendanceStatus(overallPercentage, targetPct).color
 }
 
 /**
@@ -606,7 +610,7 @@ private fun SkipsPanel(liveResponse: LiveAttendanceResponse?, hasData: Boolean, 
                 text = when {
                     waiting -> "Snapshot pending"
                     isSafe -> "≈ ${skips.days} days buffer"
-                    else -> "To reach 75%"
+                    else -> "To reach ${AppSettings.targetPct.toInt()}%"
                 },
                 color = TrackerColors.TextMuted,
                 fontSize = 10.sp,
@@ -629,10 +633,10 @@ private fun StatusPill(hasData: Boolean, overallPercentage: Double, statusColor:
         )
         Spacer(modifier = Modifier.width(5.dp))
         Text(
-            text = when {
-                !hasData -> "syncing"
-                overallPercentage >= 75.0 -> "safe"
-                else -> "critical"
+            text = if (hasData) {
+                attendanceStatus(overallPercentage).label
+            } else {
+                "SYNCING"
             },
             color = statusColor,
             fontSize = 10.sp,
@@ -978,11 +982,7 @@ private fun SubjectsListCard(subjects: List<UiSubjectAttendance>) {
         Spacer(modifier = Modifier.height(8.dp))
 
         subjects.forEachIndexed { index, subject ->
-            val statusColor = when {
-                subject.percentage >= 80.0 -> TrackerColors.SafeEmerald
-                subject.percentage >= 75.0 -> TrackerColors.WarningAmber
-                else -> TrackerColors.DangerRose
-            }
+            val statusColor = attendanceStatus(subject.percentage).color
 
             Row(
                 modifier = Modifier

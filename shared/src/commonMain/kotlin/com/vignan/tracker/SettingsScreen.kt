@@ -77,12 +77,14 @@ private val ROW_HEIGHT = 44.dp
 fun SettingsScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    onTargetChanged: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
     var showSignOutConfirm by remember { mutableStateOf(false) }
     val use24Hour = AppSettings.use24HourClock
     val sundayClasses = AppSettings.sundayClassesEnabled
+    val targetPct = AppSettings.targetPct
     val registerPinned = AppSettings.registerTotalsPinned
     val version = remember { getPlatform().appVersion }
 
@@ -192,6 +194,22 @@ fun SettingsScreen(
                 checked = sundayClasses,
                 onCheckedChange = { enabled ->
                     scope.launch { AppSettings.setSundayClassesEnabled(enabled) }
+                }
+            )
+
+            SettingsDivider()
+
+            TargetAttendanceRow(
+                targetPct = targetPct,
+                onSelect = { percentage ->
+                    if (percentage == targetPct) return@TargetAttendanceRow
+                    scope.launch {
+                        AppSettings.setTargetPct(percentage)
+                        // The portal computes safe-skip counts server-side, so
+                        // refresh once with the new target instead of leaving
+                        // the dashboard on the old numbers.
+                        onTargetChanged()
+                    }
                 }
             )
         }
@@ -548,6 +566,95 @@ private fun trackerSwitchColors() = SwitchDefaults.colors(
     uncheckedTrackColor = TrackerColors.SurfaceElevated,
     uncheckedBorderColor = TrackerColors.HairlineBorderLight
 )
+
+/**
+ * Target picker. Changing it changes every verdict (SAFE starts five points
+ * above the target), so keep the range visible instead of hiding it behind a
+ * dropdown.
+ */
+@Composable
+private fun TargetAttendanceRow(
+    targetPct: Double,
+    onSelect: (Double) -> Unit
+) {
+    val target = normalizeTargetPct(targetPct)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Target attendance",
+                    color = TrackerColors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.SansSerif
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "SAFE from ${(target + 5).toInt()}% · BORDER at ${target.toInt()}%",
+                    color = TrackerColors.TextSubtle,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = "${target.toInt()}%",
+                color = TrackerColors.TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            TARGET_PCT_OPTIONS.forEach { option ->
+                val selected = option == target
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(
+                            if (selected) TrackerColors.PrimaryWhite
+                            else TrackerColors.SurfaceElevated
+                        )
+                        .border(
+                            1.dp,
+                            if (selected) TrackerColors.PrimaryWhite
+                            else TrackerColors.HairlineBorderLight,
+                            RoundedCornerShape(7.dp)
+                        )
+                        .pressClickable { onSelect(option) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${option.toInt()}%",
+                        color = if (selected) TrackerColors.PureBlack
+                        else TrackerColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+}
 
 /** A row that exists to say "not yet" — visibly inert, never tappable. */
 @Composable
