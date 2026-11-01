@@ -19,8 +19,15 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
     // Build once and reuse; rebuilding per call was a measurable cold-start cost.
     private var cachedPrefs: SharedPreferences? = null
 
+    // If the keystore/encrypted store is unusable, stay memory-only. Never
+    // fall back to plaintext SharedPreferences: that silently put the portal
+    // password on disk unencrypted when creation failed once.
+    private var prefsUnavailable = false
+    private var legacyFallbackCleaned = false
+
     private fun getPrefs(): SharedPreferences? {
         cachedPrefs?.let { return it }
+        if (prefsUnavailable) return null
         val ctx = contextProvider() ?: return null
         return try {
             EncryptedSharedPreferences.create(
@@ -31,11 +38,24 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
                     .build(),
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            ).also { cachedPrefs = it }
+            ).also {
+                cachedPrefs = it
+                deleteLegacyPlaintextFallback(ctx)
+            }
         } catch (e: Exception) {
-            ctx.getSharedPreferences("viit_secure_prefs_fallback", Context.MODE_PRIVATE)
-                .also { cachedPrefs = it }
+            // Credentials stay in memory for this process; a restart asks for
+            // the password again rather than persisting it in the clear.
+            prefsUnavailable = true
+            deleteLegacyPlaintextFallback(ctx)
+            null
         }
+    }
+
+    /** Remove the plaintext file written by builds before the fallback was removed. */
+    private fun deleteLegacyPlaintextFallback(ctx: Context) {
+        if (legacyFallbackCleaned) return
+        legacyFallbackCleaned = true
+        runCatching { ctx.deleteSharedPreferences(LEGACY_PLAINTEXT_PREFS) }
     }
 
     override suspend fun load(): StoredCredentials? {
@@ -63,6 +83,7 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         inMemoryCache = null
         inMemoryTargetPct = null
         inMemoryResponses.clear()
+        contextProvider()?.let { deleteLegacyPlaintextFallback(it) }
         val prefs = getPrefs() ?: return
         prefs.edit().clear().apply()
     }
@@ -230,7 +251,11 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
 
     private companion object {
         /** Unencrypted prefs holding only non-secret UI state, readable pre-composition. */
-        const val UI_PREFS = "viit_ui_prefs"    }
+        const val UI_PREFS = "viit_ui_prefs"
+
+        /** Old insecure fallback file; deleted on first successful (or failed) open. */
+        const val LEGACY_PLAINTEXT_PREFS = "viit_secure_prefs_fallback"
+    }
 }
 
 private val androidStore = AndroidCredentialStore { AppContextProvider.context }

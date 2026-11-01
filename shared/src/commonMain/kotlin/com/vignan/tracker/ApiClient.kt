@@ -10,6 +10,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlin.coroutines.cancellation.CancellationException
 
 sealed class ApiError : Exception() {
     class InvalidCredentials(override val message: String) : ApiError()
@@ -31,6 +32,33 @@ private val CONNECT_FAILURE_NAMES = setOf(
     "NoRouteToHostException",
     "NetworkUnavailableException",
 )
+
+/** Bundled endpoint used when both the stored URL and the remote KV lookup fail. */
+internal const val DEFAULT_API_BASE_URL =
+    "https://viit-attendance-api.nxd2k26.workers.dev"
+
+/**
+ * The worker URL arrives from an unsigned remote KV document. Accept only
+ * HTTPS on the project's Cloudflare Workers account; anything else (plain
+ * HTTP, a lookalike domain, a private address) is ignored and the bundled
+ * endpoint is used instead of sending student credentials to it.
+ */
+private val PINNED_API_HOSTS = setOf("viit-attendance-api.nxd2k26.workers.dev")
+private const val PINNED_API_HOST_SUFFIX = ".nxd2k26.workers.dev"
+
+internal fun validateApiBaseUrl(raw: String?): String? {
+    val trimmed = raw?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() } ?: return null
+    val url = runCatching { Url(trimmed) }.getOrNull() ?: return null
+
+    if (url.protocol != URLProtocol.HTTPS) return null
+    if (url.host.isBlank()) return null
+    if (url.user != null || url.password != null) return null
+    if (url.specifiedPort != 0 && url.specifiedPort != 443) return null
+
+    val host = url.host.lowercase()
+    val allowed = host in PINNED_API_HOSTS || host.endsWith(PINNED_API_HOST_SUFFIX)
+    return if (allowed) trimmed else null
+}
 
 /** Maps an engine exception to an [ApiError]; socket failures are name-matched to stay JVM-free. */
 internal fun Throwable.toApiError(): ApiError = when (this) {
@@ -110,15 +138,14 @@ class ApiClient(
     private suspend fun getBaseUrl(): String {
         cachedBaseUrl?.let { return it }
 
-        // Skip the KV round trip when a previously resolved URL is stored.
-        baseUrlProvider()?.let { stored ->
-            if (stored.isNotBlank()) {
-                cachedBaseUrl = stored
-                return stored
-            }
+        // Skip the KV round trip when a previously resolved URL is stored —
+        // but validate it again: older builds persisted whatever KV returned.
+        validateApiBaseUrl(baseUrlProvider())?.let { stored ->
+            cachedBaseUrl = stored
+            return stored
         }
 
-        return try {
+        val remote = try {
             val response = client.get(kvConfigUrl) {
                 // Don't let a dead config store add a minute to cold start.
                 timeout {
@@ -126,37 +153,39 @@ class ApiClient(
                     connectTimeoutMillis = 10_000
                 }
             }
-            if (response.status.isSuccess()) {
+            if (!response.status.isSuccess()) {
+                null
+            } else {
                 val rawText = response.bodyAsText().trim()
-                
+
                 // 1. Try direct JSON parsing
                 val directUrl = runCatching {
                     AppJson.decodeFromString<KvConfigResponse>(rawText).apiUrl
                 }.getOrNull()
 
-                // 2. Extract valid https URL cleanly if wrapped inside kv.devh.in envelope metadata
-                val extractedUrl = directUrl ?: Regex("""https://[^\s"\\{}]+""").find(rawText)?.value
-                
-                if (extractedUrl.isNullOrBlank()) {
-                    throw ApiError.ServiceUnavailable(
-                        "Unable to extract valid API URL from KV response"
-                    )
-                }
+                // 2. Extract a URL if it is wrapped in kv.devh.in envelope metadata
+                val extractedUrl = directUrl
+                    ?: Regex("""https://[^\s"\\{}]+""").find(rawText)?.value
 
-            val cleanUrl = extractedUrl.trimEnd('/')
-            cachedBaseUrl = cleanUrl
-            onBaseUrlResolved(cleanUrl)
-            cleanUrl
-            } else {
-                throw ApiError.ServiceUnavailable(
-                    "Failed to resolve API endpoint from remote KV store"
-                )
+                validateApiBaseUrl(extractedUrl)
             }
-        } catch (e: ApiError) {
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
-            throw e.toApiError()
+            // KV is only a discovery mechanism. A timeout/outage must not brick
+            // the app when a known-good bundled endpoint exists.
+            null
         }
+
+        if (remote != null) {
+            cachedBaseUrl = remote
+            onBaseUrlResolved(remote)
+            return remote
+        }
+
+        cachedBaseUrl = DEFAULT_API_BASE_URL
+        onBaseUrlResolved(DEFAULT_API_BASE_URL)
+        return DEFAULT_API_BASE_URL
     }
 
     private suspend fun post(path: String, body: String): HttpResponse {
@@ -168,6 +197,8 @@ class ApiClient(
                 apiKeyProvider()?.let { header("X-API-Key", it) }
                 header("Cache-Control", "no-store")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: ApiError) {
             throw e
         } catch (e: Throwable) {
