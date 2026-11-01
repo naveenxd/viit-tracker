@@ -14,6 +14,14 @@ interface CredentialStore {
     suspend fun getCachedAttendance(): String?
     suspend fun saveCachedAttendance(json: String)
 
+    /**
+     * Durable endpoint cache for payloads that are not part of the live
+     * snapshot (attendance report, register, profile-only fallback). Keys are
+     * namespaced by the caller; [clear] removes every entry.
+     */
+    suspend fun getCachedResponse(key: String): String?
+    suspend fun saveCachedResponse(key: String, json: String)
+
     /** Attendance target percentage, null when the user has never chosen one. */
     suspend fun getTargetPct(): Double?
     suspend fun saveTargetPct(percentage: Double)

@@ -35,7 +35,9 @@ data class AttendanceInvalidation(
  * Both the app and the home-screen widget fetch through the same repository,
  * which publishes here after a successful fetch. Persisting to [CredentialStore]
  * keeps the cache across process restarts; the flows let the surface that did
- * *not* fetch react immediately:
+ * *not* fetch react immediately. Because the profile and timetable are fields
+ * of this payload, the Profile and Timetable tabs get the same durable cache
+ * without separate requests:
  *
  * - widget tap/schedule fetch → app dashboard updates in place
  * - app fetch → widget re-renders with the same data

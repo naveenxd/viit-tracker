@@ -13,6 +13,7 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
     private var inMemoryCreds: StoredCredentials? = null
     private var inMemoryCache: String? = null
     private var inMemoryTargetPct: Double? = null
+    private val inMemoryResponses = mutableMapOf<String, String>()
 
     // EncryptedSharedPreferences creation runs master-key crypto — expensive.
     // Build once and reuse; rebuilding per call was a measurable cold-start cost.
@@ -61,6 +62,7 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         inMemoryCreds = null
         inMemoryCache = null
         inMemoryTargetPct = null
+        inMemoryResponses.clear()
         val prefs = getPrefs() ?: return
         prefs.edit().clear().apply()
     }
@@ -74,6 +76,17 @@ class AndroidCredentialStore(private val contextProvider: () -> Context?) : Cred
         inMemoryCache = json
         val prefs = getPrefs() ?: return
         prefs.edit().putString("cached_attendance_json", json).apply()
+    }
+
+    override suspend fun getCachedResponse(key: String): String? {
+        val prefs = getPrefs() ?: return inMemoryResponses[key]
+        return prefs.getString("cached_response_$key", null) ?: inMemoryResponses[key]
+    }
+
+    override suspend fun saveCachedResponse(key: String, json: String) {
+        inMemoryResponses[key] = json
+        val prefs = getPrefs() ?: return
+        prefs.edit().putString("cached_response_$key", json).apply()
     }
 
     override suspend fun getTargetPct(): Double? {

@@ -59,11 +59,15 @@ private enum class RegisterView(val label: String) {
  *
  * The screen is composed only while its tab is selected, so leaving the tab
  * throws the local state away and a return trip would otherwise start from a
- * blank screen + full network fetch. Serving this cache first makes the revisit
- * instant; the fetch then refreshes it in the background.
+ * blank screen + full network fetch. [ResponseCache] backs this up across
+ * process restarts, so the first open after a cold start is fast too.
  */
-private object RegisterCache {
+internal object RegisterCache {
     var cached: AttendanceRegisterResponse? = null
+
+    fun clear() {
+        cached = null
+    }
 }
 
 /**
@@ -95,6 +99,16 @@ fun RegisterScreen(
         isLoading = true
         error = null
         scope.launch {
+            // The in-memory snapshot makes tab revisits instant. On a cold
+            // start, hydrate from the durable cache before the network call so
+            // the matrix is readable while the scrape runs.
+            if (register == null) {
+                repository.getCachedRegister()?.let {
+                    register = it
+                    RegisterCache.cached = it
+                }
+            }
+
             repository.fetchRegister().fold(
                 onSuccess = {
                     register = it

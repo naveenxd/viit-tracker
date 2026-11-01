@@ -108,18 +108,55 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
 
     var isReportLoading by remember { mutableStateOf(false) }
     var report by remember { mutableStateOf<AttendanceReportResponse?>(null) }
+    var reportQuery by remember { mutableStateOf<ReportQuery?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var requestedRange by remember { mutableStateOf("semester to date") }
+    // Guards against an older request landing after the user switches ranges.
+    var requestSeq by remember { mutableStateOf(0) }
 
     fun load(from: String?, to: String?, rangeLabel: String) {
+        val query = ReportQuery(from, to, excludeOthers)
+        val seq = ++requestSeq
         isReportLoading = true
         error = null
         requestedRange = rangeLabel
+
+        // A different range must not render the previous range's numbers
+        // under the new label while its own cache/network result is pending.
+        if (reportQuery != query) {
+            reportQuery = null
+            report = null
+        }
+
         scope.launch {
-            val result = repository.fetchAttendanceReport(fromDate = from, toDate = to, excludeOthers = excludeOthers)
+            // Cache first so revisiting a range paints immediately; the network
+            // refresh then replaces it in place.
+            if (reportQuery != query) {
+                repository.getCachedAttendanceReport(query)?.let { cached ->
+                    if (seq == requestSeq) {
+                        report = cached
+                        reportQuery = query
+                    }
+                }
+            }
+
+            val result = repository.fetchAttendanceReport(
+                fromDate = query.fromDate,
+                toDate = query.toDate,
+                excludeOthers = query.excludeOthers
+            )
+            if (seq != requestSeq) return@launch
+
             result.fold(
-                onSuccess = { report = it },
-                onFailure = { error = it.toUserMessage() }
+                onSuccess = {
+                    report = it
+                    reportQuery = query
+                },
+                onFailure = {
+                    // Keep cached data on screen; only an empty screen shows
+                    // the failure.
+                    if (report == null) error = it.toUserMessage()
+                }
             )
             isReportLoading = false
         }
@@ -136,8 +173,11 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
             ReportMode.TILL_NOW -> load(null, null, "semester to date")
             ReportMode.FROM_TO -> {
                 if (fromDate.isBlank() || toDate.isBlank()) {
+                    requestSeq++
+                    isReportLoading = false
                     error = "Pick both the from and to dates."
                     report = null
+                    reportQuery = null
                     return
                 }
                 load(fromDate, toDate, "$fromDate → $toDate")
@@ -164,7 +204,12 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
             // Monthly is fully driven by the dropdowns — load the current selection.
             ReportMode.PER_MONTH -> loadForMode()
             // From-to waits for the user to pick dates.
-            ReportMode.FROM_TO -> report = null
+            ReportMode.FROM_TO -> {
+                requestSeq++
+                isReportLoading = false
+                report = null
+                reportQuery = null
+            }
         }
     }
 
@@ -325,10 +370,11 @@ fun ReportScreen(onOpenSettings: () -> Unit = {}) {
         // re-query that lands on the same card does not re-animate it.
         val currentReport = report
         val resultState = when {
-            isReportLoading -> ReportState.LOADING
-            error != null -> ReportState.ERROR
+            // Cached data stays visible while the background refresh runs.
             currentReport != null && currentReport.subjects.isEmpty() -> ReportState.EMPTY
             currentReport != null -> ReportState.RESULT
+            isReportLoading -> ReportState.LOADING
+            error != null -> ReportState.ERROR
             else -> ReportState.IDLE
         }
 

@@ -35,6 +35,15 @@ class AttendanceRepository(
     suspend fun getCachedAttendanceResponse(): LiveAttendanceResponse? =
         AttendanceCache.load(store)?.response
 
+    suspend fun getCachedAttendanceReport(query: ReportQuery): AttendanceReportResponse? =
+        ResponseCache.loadReport(query, store)
+
+    suspend fun getCachedRegister(): AttendanceRegisterResponse? =
+        ResponseCache.loadRegister(store)
+
+    suspend fun getCachedProfile(): ProfileInfo? =
+        ResponseCache.loadProfile(store)
+
     /** True when credentials verified AND persisted. */
     suspend fun login(rollNo: String, password: String, rememberMe: Boolean = true, currentTimeMs: Long = System.currentTimeMillis()): Result<Unit> {
         val canAttempt = loginMutex.withLock {
@@ -83,6 +92,7 @@ class AttendanceRepository(
             // Save valid credentials & publish the one shared snapshot. Publishing
             // persists the cache and wakes the other surface.
             store.save(creds.copy(lastLoginTimestamp = currentTimeMs))
+            ResponseCache.saveProfile(response.profile, store)
             AttendanceCache.publish(response, source, store)
             Result.success(response)
         } catch (e: ApiError.InvalidCredentials) {
@@ -108,8 +118,16 @@ class AttendanceRepository(
      */
     suspend fun fetchAttendanceReport(fromDate: String? = null, toDate: String? = null, excludeOthers: Boolean = false): Result<AttendanceReportResponse> {
         val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
+        val query = ReportQuery(fromDate, toDate, excludeOthers)
         return try {
-            Result.success(api.attendanceReport(CredentialsRequest(creds.rollNo, creds.password), fromDate, toDate, excludeOthers))
+            val response = api.attendanceReport(
+                CredentialsRequest(creds.rollNo, creds.password),
+                fromDate,
+                toDate,
+                excludeOthers
+            )
+            ResponseCache.saveReport(query, response, store)
+            Result.success(response)
         } catch (e: Throwable) {
             Result.failure(e)
         }
@@ -119,7 +137,9 @@ class AttendanceRepository(
     suspend fun fetchRegister(): Result<AttendanceRegisterResponse> {
         val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
         return try {
-            Result.success(api.attendanceRegister(CredentialsRequest(creds.rollNo, creds.password)))
+            val response = api.attendanceRegister(CredentialsRequest(creds.rollNo, creds.password))
+            ResponseCache.saveRegister(response, store)
+            Result.success(response)
         } catch (e: Throwable) {
             Result.failure(e)
         }
@@ -129,6 +149,7 @@ class AttendanceRepository(
         val creds = store.load() ?: return Result.failure(IllegalStateException("Not logged in"))
         return try {
             val response = api.fetchProfile(CredentialsRequest(creds.rollNo, creds.password))
+            ResponseCache.saveProfile(response.profile, store)
             Result.success(response.profile)
         } catch (e: Throwable) {
             Result.failure(e)
