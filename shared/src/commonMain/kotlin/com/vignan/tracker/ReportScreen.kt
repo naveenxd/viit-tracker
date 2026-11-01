@@ -689,8 +689,8 @@ private fun statusColor(percentage: Double): Color = when {
 
 private fun statusLabel(percentage: Double): String = when {
     percentage >= 80.0 -> "SAFE"
-    percentage >= 75.0 -> "WATCH"
-    else -> "LOW"
+    percentage >= 75.0 -> "BORDERLINE"
+    else -> "DANGER"
 }
 
 /** Thin rounded progress bar, animated into place. */
