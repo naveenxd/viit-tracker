@@ -31,6 +31,11 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".WidgetRefreshJob"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <!-- Attendance Widget Provider (4:2) -->
         <receiver
             android:name=".AttendanceAppWidget"

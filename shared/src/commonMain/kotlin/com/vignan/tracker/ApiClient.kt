@@ -11,6 +11,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 sealed class ApiError : Exception() {
     class InvalidCredentials(override val message: String) : ApiError()
@@ -221,9 +223,10 @@ class ApiClient(
         }
     }
 
-    private inline fun <reified T> decode(body: String): T =
+    private suspend inline fun <reified T> decode(body: String): T = withContext(Dispatchers.Default) {
         runCatching { AppJson.decodeFromString<T>(body) }
             .getOrElse { throw ApiError.ServiceUnavailable("Malformed response from server") }
+    }
 
     /** Full attendance payload — the main call. */
     suspend fun liveAttendance(

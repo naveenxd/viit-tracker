@@ -5,6 +5,9 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.util.SizeF
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.Toast
@@ -16,7 +19,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -36,16 +38,7 @@ object WidgetUpdater {
     /** How long the post-refresh footer confirmation stays on screen. */
     private const val FLASH_HOLD_MS = 3_000L
 
-    /**
-     * Toast.show() only *posts* the enqueue to the main looper; if the broadcast's
-     * goAsync() finishes before that message runs the process can be torn down and
-     * the toast is never handed to the system. Holding the receiver briefly closes
-     * the race.
-     */
-    private const val TOAST_DRAIN_MS = 700L
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val refreshMutex = Mutex()
 
     /** Monotonic id of the last render — lets a delayed re-render detect staleness. */
     private val renderSeq = AtomicInteger(0)
@@ -104,121 +97,44 @@ object WidgetUpdater {
         }
     }
 
-    /**
-     * Handle a user tap on the widget: refetch attendance from the network in the
-     * background, re-render with fresh data and toast the outcome.
-     *
-     * @param onDone called when the work completes — pass
-     * [android.content.BroadcastReceiver.PendingResult.finish] from onReceive
-     * (via goAsync) so the system keeps the process alive until the fetch finishes.
-     */
-    fun refreshFromTap(context: Context, onDone: (() -> Unit)? = null) {
-        val appContext = context.applicationContext
-        scope.launch {
-            var locked = false
-            try {
-                // Serialize: a second tap while a fetch is in flight does nothing
-                // (no duplicate toasts / overlapping requests).
-                locked = refreshMutex.tryLock()
-                if (!locked) return@launch
-
-                // While fetching, show the last known data with a SYNCING state —
-                // or a full placeholder when there is nothing cached yet.
-                val before = loadCached(appContext) ?: WidgetData.syncing()
-                renderAll(appContext, before.asSyncing())
-
-                val result = AttendanceRepository().fetchLiveAttendance(
-                    source = AttendanceSnapshotSource.WIDGET
+    /** Runs in a JobService, so slow college Wi-Fi cannot time out a broadcast. */
+    suspend fun refresh(context: Context, fromTap: Boolean) {
+        val before = loadCached(context) ?: WidgetData.syncing()
+        renderAll(context, before.asSyncing())
+        val result = AttendanceRepository().fetchLiveAttendance(
+            source = AttendanceSnapshotSource.WIDGET
+        )
+        val outcome = result.fold(
+            onSuccess = { resp ->
+                WidgetRefreshOutcome(
+                    data = WidgetData.from(resp),
+                    toast = "Attendance updated",
+                    flash = WidgetFlash("updated ✓", ok = true)
                 )
-                val outcome = result.fold(
-                    onSuccess = { resp ->
-                        WidgetRefreshOutcome(
-                            data = WidgetData.from(resp),
-                            toast = "Attendance updated",
-                            flash = WidgetFlash("updated ✓", ok = true)
-                        )
-                    },
-                    onFailure = { err ->
-                        when {
-                            // Repository cleared the store on bad credentials —
-                            // don't keep showing stale data as if it were valid.
-                            err is ApiError.InvalidCredentials ->
-                                WidgetRefreshOutcome(
-                                    data = WidgetData.syncing(),
-                                    toast = "Session expired — log in to refresh",
-                                    flash = WidgetFlash("session expired", ok = false)
-                                )
-                            // Network failed → keep showing last known data.
-                            before.isSyncing ->
-                                WidgetRefreshOutcome(
-                                    data = before,
-                                    toast = "Update failed — no cached data",
-                                    flash = WidgetFlash("couldn't update", ok = false)
-                                )
-                            else ->
-                                WidgetRefreshOutcome(
-                                    data = before,
-                                    toast = "Update failed — showing cached data",
-                                    flash = WidgetFlash("couldn't update", ok = false)
-                                )
-                        }
-                    }
-                )
-
-                // The widget itself carries the confirmation (works even when Android
-                // suppresses the background toast), then reverts to its idle footer.
-                val seq = renderAll(appContext, outcome.data, outcome.flash)
-                scope.launch {
-                    delay(FLASH_HOLD_MS)
-                    if (renderSeq.get() == seq) renderAll(appContext, outcome.data)
+            },
+            onFailure = { err ->
+                when {
+                    err is ApiError.InvalidCredentials -> WidgetRefreshOutcome(
+                        WidgetData.syncing(), "Session expired — log in to refresh",
+                        WidgetFlash("session expired", ok = false)
+                    )
+                    before.isSyncing -> WidgetRefreshOutcome(
+                        before, "Update failed — no cached data",
+                        WidgetFlash("couldn't update", ok = false)
+                    )
+                    else -> WidgetRefreshOutcome(
+                        before, "Update failed — showing cached data",
+                        WidgetFlash("couldn't update", ok = false)
+                    )
                 }
-
-                toast(appContext, outcome.toast)
-                // Keep the broadcast alive until the toast has actually been enqueued.
-                delay(TOAST_DRAIN_MS)
-            } finally {
-                if (locked) refreshMutex.unlock()
-                onDone?.invoke()
             }
-        }
-    }
-
-    /**
-     * Silent background refresh driven by the widget's hourly update period
-     * (`android:updatePeriodMillis`). Same fetch as [refreshFromTap] but with no
-     * toast and no "syncing" flicker: the last known snapshot stays on screen until
-     * fresh data (or, on failure, the previous snapshot) is ready.
-     *
-     * @param onDone called when the work completes — pass
-     * [android.content.BroadcastReceiver.PendingResult.finish] from onReceive
-     * (via goAsync) so the system keeps the process alive until the fetch finishes.
-     */
-    fun refreshOnSchedule(context: Context, onDone: (() -> Unit)? = null) {
-        val appContext = context.applicationContext
-        scope.launch {
-            var locked = false
-            try {
-                // Share the lock with tap refreshes so an hourly tick never races a
-                // user tap (and vice versa).
-                locked = refreshMutex.tryLock()
-                if (!locked) return@launch
-
-                val before = loadCached(appContext) ?: WidgetData.syncing()
-                val result = AttendanceRepository().fetchLiveAttendance(
-                    source = AttendanceSnapshotSource.WIDGET
-                )
-                val data = result.fold(
-                    onSuccess = { WidgetData.from(it) },
-                    onFailure = { err ->
-                        // Bad credentials clear the store — don't keep showing stale
-                        // data as if it were valid.
-                        if (err is ApiError.InvalidCredentials) WidgetData.syncing() else before
-                    }
-                )
-                renderAll(appContext, data)
-            } finally {
-                if (locked) refreshMutex.unlock()
-                onDone?.invoke()
+        )
+        val seq = renderAll(context, outcome.data, if (fromTap) outcome.flash else null, refreshing = false)
+        if (fromTap) {
+            toast(context, outcome.toast)
+            scope.launch {
+                delay(FLASH_HOLD_MS)
+                if (renderSeq.get() == seq) renderAll(context, outcome.data)
             }
         }
     }
@@ -255,7 +171,12 @@ object WidgetUpdater {
      * @return the render generation, so callers can tell whether a later render has
      *         superseded this one before scheduling a revert.
      */
-    private fun renderAll(context: Context, data: WidgetData, flash: WidgetFlash? = null): Int {
+    private fun renderAll(
+        context: Context,
+        data: WidgetData,
+        flash: WidgetFlash? = null,
+        refreshing: Boolean = WidgetRefreshJob.isRefreshing
+    ): Int {
         val seq = renderSeq.incrementAndGet()
         val manager = AppWidgetManager.getInstance(context)
 
@@ -263,13 +184,54 @@ object WidgetUpdater {
             ComponentName(context, AttendanceAppWidget::class.java)
         )
         if (compactIds.isNotEmpty()) {
-            val views = RemoteViews(context.packageName, R.layout.widget_attendance)
-            views.setOnClickPendingIntent(R.id.widget_container, refreshPendingIntent(context))
-            bindData(context, views, data, flash)
-            manager.updateAppWidget(compactIds, views)
+            compactIds.forEach { id ->
+                val options = manager.getAppWidgetOptions(id)
+                fun sizedViews(width: Int, height: Int): RemoteViews {
+                    val views = RemoteViews(context.packageName, R.layout.widget_attendance)
+                    views.setOnClickPendingIntent(
+                        R.id.widget_container, if (refreshing) null else refreshPendingIntent(context)
+                    )
+                    bindData(context, views, if (refreshing) data.asSyncing() else data, flash)
+                    bindSize(context, views, width, height)
+                    if (refreshing) views.setContentDescription(R.id.widget_container, "Updating attendance. Please wait.")
+                    return views
+                }
+                val sizes = if (Build.VERSION.SDK_INT >= 31) {
+                    @Suppress("DEPRECATION")
+                    options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
+                        ?.filter { it.width > 0 && it.height > 0 }?.distinct()?.take(16)
+                } else null
+                val views = if (Build.VERSION.SDK_INT >= 31 && !sizes.isNullOrEmpty()) {
+                    RemoteViews(sizes.associateWith { sizedViews(it.width.toInt(), it.height.toInt()) })
+                } else {
+                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidth)
+                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
+                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
+                    RemoteViews(sizedViews(maxWidth, minHeight), sizedViews(minWidth, maxHeight))
+                }
+                manager.updateAppWidget(id, views)
+            }
         }
 
         return seq
+    }
+
+    /** Use each host's actual space, including Shelf and orientation-specific sizes. */
+    private fun bindSize(context: Context, views: RemoteViews, width: Int, height: Int) {
+        val size = WidgetLayoutSize(width.coerceAtLeast(1), height.coerceAtLeast(1), context.resources.configuration.fontScale)
+        val density = context.resources.displayMetrics.density
+        val padding = (if (size.showToday) 12 else 8) * density
+        views.setViewPadding(R.id.widget_container, (12 * density).toInt(), padding.toInt(), (12 * density).toInt(), padding.toInt())
+        views.setViewVisibility(R.id.widget_classes_group, if (size.showClasses) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_attendance_caption, if (size.showCaptions) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_classes_caption, if (size.showCaptions) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_progress_row, if (size.showCaptions) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_today_row, if (size.showToday) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_roll_number, if (size.showDetails) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_status_detail, if (size.showDetails) View.VISIBLE else View.GONE)
+        views.setTextViewTextSize(R.id.widget_percentage, TypedValue.COMPLEX_UNIT_SP, size.percentageSize)
+        views.setTextViewTextSize(R.id.widget_percentage_fraction, TypedValue.COMPLEX_UNIT_SP, size.percentageSize / 2)
     }
 
     /** Write a [WidgetData] snapshot into the widget layout. */

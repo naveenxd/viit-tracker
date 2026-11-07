@@ -15,6 +15,24 @@ app with a shared Compose UI.
 - Faculty profile and academic record view
 - Light, dark, and AMOLED themes; 24-hour clock and motion options
 
+Widget refreshes use a single background job: taps during a pending/running refresh
+are ignored, and the existing long request timeouts remain unchanged. Widgets
+adapt to host sizes down to 180 × 100 dp; smaller layouts hide secondary details.
+
+Shelf discovery varies by launcher and OS version. Spotify has a
+[vendor integration](https://www.oppo.com/en/newsroom/press/oppo-teams-up-with-spotify/),
+but that does not establish a partnership requirement for other widgets. This
+project registers a standard Android widget.
+
+On the tested Realme RMX5070 (Android 16), Shelf's own `+` catalogue offers
+LinkedIn's **Highlights for you**, rather than all its installed widgets.
+Inspection of the installed Shelf package shows selected Android widget entries
+loaded from cloud configuration and matched by package/component. No app-side
+Shelf registration was found in LinkedIn's widget manifest. This points to
+vendor catalogue inclusion as the missing step for Tracker; it is not implemented.
+The release component to submit is
+`com.vignan.tracker/com.vignan.tracker.AttendanceAppWidget`.
+
 ## Built with
 
 - Kotlin Multiplatform + Compose Multiplatform (Material 3)

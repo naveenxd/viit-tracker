@@ -152,6 +152,7 @@
             </LinearLayout>
 
             <TextView
+                android:id="@+id/widget_attendance_caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -164,6 +165,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/widget_classes_group"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
@@ -182,6 +184,7 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/widget_classes_caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
@@ -196,6 +199,7 @@
 
     <!-- ── Progress: one bar per verdict colour ──────────────────────────── -->
     <FrameLayout
+        android:id="@+id/widget_progress_row"
         android:layout_width="match_parent"
         android:layout_height="3dp"
         android:layout_marginTop="8dp">
@@ -246,6 +250,7 @@
 
     <!-- ── Today: per-subject verdicts + refresh ─────────────────────────── -->
     <LinearLayout
+        android:id="@+id/widget_today_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="9dp"

@@ -1,5 +1,7 @@
 package com.vignan.tracker
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -64,9 +66,9 @@ object AttendanceCache {
             _snapshot.value?.let { return it }
 
             val json = store.getCachedAttendance() ?: return null
-            val response = runCatching {
-                AppJson.decodeFromString<LiveAttendanceResponse>(json)
-            }.getOrNull() ?: return null
+            val response = withContext(Dispatchers.Default) {
+                runCatching { AppJson.decodeFromString<LiveAttendanceResponse>(json) }.getOrNull()
+            } ?: return null
 
             AttendanceSnapshot(response, AttendanceSnapshotSource.CACHE).also {
                 _snapshot.value = it
@@ -80,9 +82,10 @@ object AttendanceCache {
         store: CredentialStore = getCredentialStore()
     ) {
         mutex.withLock {
-            store.saveCachedAttendance(
+            val json = withContext(Dispatchers.Default) {
                 AppJson.encodeToString(LiveAttendanceResponse.serializer(), response)
-            )
+            }
+            store.saveCachedAttendance(json)
             _snapshot.value = AttendanceSnapshot(response, source)
         }
     }

@@ -1,5 +1,8 @@
 package com.vignan.tracker
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 
@@ -78,7 +81,9 @@ object ResponseCache {
         store: CredentialStore
     ): T? {
         val json = store.getCachedResponse(key) ?: return null
-        return runCatching { AppJson.decodeFromString(serializer, json) }.getOrNull()
+        return withContext(Dispatchers.Default) {
+            runCatching { AppJson.decodeFromString(serializer, json) }.getOrNull()
+        }
     }
 
     private suspend fun <T> write(
@@ -87,8 +92,17 @@ object ResponseCache {
         value: T,
         store: CredentialStore
     ) {
-        runCatching {
-            store.saveCachedResponse(key, AppJson.encodeToString(serializer, value))
+        try {
+            val json = withContext(Dispatchers.Default) { AppJson.encodeToString(serializer, value) }
+            store.saveCachedResponse(key, json)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // A cache write failure must not discard the successful response.
         }
     }
 }
+
+/** Keep the twelve most recently saved report ranges, including an existing range refreshed now. */
+internal fun recentReportKeys(keys: List<String>, incoming: String? = null): List<String> =
+    (keys.filter { it != incoming } + listOfNotNull(incoming)).distinct().takeLast(12)
