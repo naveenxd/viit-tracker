@@ -1,33 +1,46 @@
 {
-  "latest_version": "1.3.1",
-  "latest_build": 7,
-  "apk_build": 7,
-  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.3.1/viit-tracker-1.3.1.apk",
+  "latest_version": "1.4.0",
+  "latest_build": 8,
+  "apk_build": 8,
+  "apk_url": "https://github.com/naveenxd/viit-tracker/releases/download/v1.4.0/viit-tracker-1.4.0.apk",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.3.1/viit-tracker-1.3.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.3.1/viit-tracker-1.3.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.3.1/viit-tracker-1.3.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.4.0/viit-tracker-1.4.0-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/naveenxd/viit-tracker/releases/download/v1.4.0/viit-tracker-1.4.0-armeabi-v7a.apk",
+    "x86_64": "https://github.com/naveenxd/viit-tracker/releases/download/v1.4.0/viit-tracker-1.4.0-x86_64.apk"
   },
   "apk_builds": {
-    "arm64-v8a": 7,
-    "armeabi-v7a": 7,
-    "x86_64": 7
+    "arm64-v8a": 8,
+    "armeabi-v7a": 8,
+    "x86_64": 8
   },
   "sha256": {
-    "arm64-v8a": "0b20313ddeed886b1ffbb54549e0403380fdfdc51062ea40d7c2904a24535c80",
-    "armeabi-v7a": "5ca1e646cdfd96352df9c610f85d1b076b383e10d88368ec8c316cfdb84d282b",
-    "x86_64": "e64ccbf8e36d693a79431c45c3553817839711df9bd074375fa544914f90a5c6",
-    "universal": "b3493b3d5b51979efcde97a0a6b8ef6795b5afca8d1379139f4cf2647c2a314f"
+    "arm64-v8a": "915ca3050178cc69d154bb1e8ccda1b7aa0166b8d6b2104c2967a645bb4f7d01",
+    "armeabi-v7a": "6e384f6d3d7ba69af8395de6bf7447e53810fee7fb3aa1f1c58542de8abca3d2",
+    "x86_64": "042cddaf87229200fef444dce3b519e3b89d05a0224703d7658925e84f37fe1d",
+    "universal": "6bb573ad5ea6fdac9623b92a17139dccfcb479dc816e43e12cea02bb251f189e"
   },
   "changelog": [
-    "Redesigned home widget with clearer status and progress.",
-    "App and widget attendance now stay in sync.",
-    "Dashboard shows a loading skeleton on first load.",
-    "Added Working Sundays toggle; Sundays stay off by default.",
-    "Fixed projection after marking bunked periods."
+    "Set your attendance target in Settings; app and widget now show the same SAFE / BORDER / DANGER status",
+    "Report, register, and profile open with saved data first, then refresh",
+    "Hardened sign-in: failed attempts are rate-limited and expired sessions are cleared",
+    "Credentials are stored encrypted only, and API traffic is locked to HTTPS",
+    "App data is excluded from backups and cleartext traffic is disabled",
+    "Widget refreshes no longer overlap, adapt to widget size, and startup work is lighter"
   ],
   "force_update": false,
   "history": [
+    {
+      "version": "1.4.0",
+      "build": 8,
+      "changelog": [
+        "Set your attendance target in Settings; app and widget now show the same SAFE / BORDER / DANGER status",
+        "Report, register, and profile open with saved data first, then refresh",
+        "Hardened sign-in: failed attempts are rate-limited and expired sessions are cleared",
+        "Credentials are stored encrypted only, and API traffic is locked to HTTPS",
+        "App data is excluded from backups and cleartext traffic is disabled",
+        "Widget refreshes no longer overlap, adapt to widget size, and startup work is lighter"
+      ]
+    },
     {
       "version": "1.3.1",
       "build": 7,
